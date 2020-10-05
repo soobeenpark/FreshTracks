@@ -8,11 +8,14 @@ TODO: Add documentation
 """
 
 from datetime import datetime, timezone, timedelta
+import logging
 import pprint
-from typing import List
 import praw
 import pymongo
 from pymongo import MongoClient
+import re
+import sys
+from typing import List
 
 
 def get_last_accessed_time(db, subreddit_name) -> datetime:
@@ -35,6 +38,7 @@ def get_last_accessed_time(db, subreddit_name) -> datetime:
         last_inserted = results[0]
         last_accessed_time = last_inserted['created_utc']
     else:
+        # If no results in database, set last accessed to 1 week ago
         last_accessed_time = datetime.now(timezone.utc) - timedelta(weeks=1)
 
     print("Last accessed: ", last_accessed_time)
@@ -110,17 +114,50 @@ def process_fresh(fresh_posts):
     """
     for post in fresh_posts:
         print(post.title)
+        if post.media and "spotify" in post.media["oembed"]["provider_name"].lower():
+            # Artist and Title already provided by Spotify - capture that
+            pprint.pprint(post.media["oembed"]["description"])
+            desc_regex = re.compile(r"""^Listen\ to\s
+                    (.+)\s                  # Title
+                    on\ Spotify.\s
+                    (.+)\s                  # Artist
+                    (·)?\s
+                    (\w+)\s                 # Type
+                    (·)?\s
+                    (\d+)                   # Year
+                    (\s·\s(\d+)\ssongs)?    # Num songs (if exist)
+                    .$""", re.VERBOSE)
+            match = desc_regex.search(post.media["oembed"]["description"])
+            if match:
+                print(match.group())
+            else:
+                raise Exception("Error parsing in process_fresh()")
 
-    pprint.pprint(vars(post))
+        else:
+            # Have to parse Artist and Title from post title, then search if they exist on Spotify
+            print()
+
 
 
 if __name__ == "__main__":
-    # Connect to local MongoDB instance
-    client = MongoClient()  # Connect to local mongo server
-    db = client.freshtracks  # Use freshtracks database
+    # Setup logger to log any exceptions
+    log_format_str = "%(asctime)s %(levelname)s %(name)s %(message)s"
+    logging.basicConfig(filename="../tmp/error.log", level=logging.ERROR,
+            format=log_format_str)
+    logger = logging.getLogger(__name__)
 
-    # Retrieve new posts in subreddit since last time script was run
-    fresh_posts = retrieve_fresh(db, "indieheads")
+    try:
+        # Connect to local MongoDB instance
+        client = MongoClient()  # Connect to local mongo server
+        db = client.freshtracks  # Use freshtracks database
 
-    # Filter new posts to only those with [FRESH] tags in them
-    process_fresh(fresh_posts)
+        # Retrieve new posts in subreddit since last time script was run
+        fresh_posts = retrieve_fresh(db, "indieheads")
+
+        # Filter new posts to only those with [FRESH] tags in them
+        process_fresh(fresh_posts)
+    except Exception as e:
+        # Log and exit program
+        print("Exception caught")
+        logger.exception(e)
+        sys.exit(1)
