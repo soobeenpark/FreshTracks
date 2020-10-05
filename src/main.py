@@ -14,6 +14,7 @@ import praw
 import pymongo
 from pymongo import MongoClient
 import re
+import spotipy
 import sys
 from typing import List
 
@@ -45,14 +46,15 @@ def get_last_accessed_time(db, subreddit_name) -> datetime:
     return last_accessed_time
 
 
-def retrieve_fresh(db, subreddit_name) -> List:
+def retrieve_fresh(last_accessed_time, subreddit_name) -> List:
     """Retrieve all fresh posts in subreddit since script was last run.
 
     In each of the posts, we make the assumption that the string "FRESH"
     appears in each submission title with new music content.
 
     Args:
-        param1 (int): The first param.
+        last_accessed_time (int): utc time of most recent reddit post in DB.
+        subreddit_name (str): Name of the subreddit we are handling.
 
     Returns:
         list: The list of new posts since the script was last ran.
@@ -68,10 +70,8 @@ def retrieve_fresh(db, subreddit_name) -> List:
     # Initialize list to store only [FRESH] posts we haven't seen before
     fresh_posts = []
 
-    # Get the date and time of the most recently added [FRESH] track
-    last_accessed_time = get_last_accessed_time(db, subreddit_name)
-
     # Add new posts from last hour into our fresh_posts list
+    limit_max = 1000
     for submission in subreddit.new(limit=50):
         # Get time that submission was created
         submission_created_time = datetime.fromtimestamp(
@@ -112,30 +112,46 @@ def process_fresh(fresh_posts):
         fresh_posts (List): The list of all retrieved submissions with FRESH in
                             the title, to be processed.
     """
+    # List of dict containing necessary information to search in Spotify
+    processed_posts = []
+
     for post in fresh_posts:
         print(post.title)
+        post_dict = dict()
+        post_dict["created_utc"] = post.created_utc
+        post_dict["ups"] = post.ups
+
         if post.media and "spotify" in post.media["oembed"]["provider_name"].lower():
             # Artist and Title already provided by Spotify - capture that
             pprint.pprint(post.media["oembed"]["description"])
             desc_regex = re.compile(r"""^Listen\ to\s
-                    (.+)\s                  # Title
+                    (?P<title>.+)\s                  # Title
                     on\ Spotify.\s
-                    (.+)\s                  # Artist
+                    (?P<artist>.+)\s                  # Artist
                     (·)?\s
-                    (\w+)\s                 # Type
+                    (?P<type>\w+)\s                 # Type
                     (·)?\s
-                    (\d+)                   # Year
-                    (\s·\s(\d+)\ssongs)?    # Num songs (if exist)
+                    (?P<year>\d+)                   # Year
+                    (\s·\s(?P<num_songs>\d+)\ssongs)?    # Num songs (if exist)
                     .$""", re.VERBOSE)
             match = desc_regex.search(post.media["oembed"]["description"])
+
             if match:
-                print(match.group())
+                # Regex properly parsed
+                gd = match.groupdict()
+                if gd.get("num_songs", None) == None:
+                    gd["num_songs"] = 1
+
+                post_dict.update(gd)
             else:
                 raise Exception("Error parsing in process_fresh()")
 
         else:
-            # Have to parse Artist and Title from post title, then search if they exist on Spotify
+            # Have to parse Artist and Title from post title,
+            # then search if that combo exists in Spotify
             print()
+
+        print(post_dict)
 
 
 
@@ -151,8 +167,14 @@ if __name__ == "__main__":
         client = MongoClient()  # Connect to local mongo server
         db = client.freshtracks  # Use freshtracks database
 
+        subreddit_name = "indieheads"
+
+        # Get the date and time of the most recently added [FRESH] track
+        last_accessed_time = get_last_accessed_time(db, subreddit_name)
+
+
         # Retrieve new posts in subreddit since last time script was run
-        fresh_posts = retrieve_fresh(db, "indieheads")
+        fresh_posts = retrieve_fresh(last_accessed_time, subreddit_name)
 
         # Filter new posts to only those with [FRESH] tags in them
         process_fresh(fresh_posts)
