@@ -7,4 +7,5 @@ praw.ini
 pyvenv.cfg
 share/
 src/__pycache__
-tmp/error.*
+src/.cache
+tmp/error.log

@@ -41,9 +41,6 @@ def retrieve_fresh(reddit, last_accessed_time, subreddit_name) -> List:
         list: The list of new posts since the script was last ran.
     """
 
-    # Get reddit instance from PRAW
-    print("Read-only mode?: ", reddit.read_only)
-
     # Get subreddit that we want
     subreddit = reddit.subreddit(subreddit_name)
 
@@ -52,7 +49,7 @@ def retrieve_fresh(reddit, last_accessed_time, subreddit_name) -> List:
 
     # Add new posts from last hour into our fresh_posts list
     limit_max = 1000
-    for submission in subreddit.new(limit=50):
+    for submission in subreddit.new(limit=80):
         # Get time that submission was created
         submission_created_time = datetime.fromtimestamp(
             submission.created_utc, tz=timezone.utc)
@@ -67,3 +64,11 @@ def retrieve_fresh(reddit, last_accessed_time, subreddit_name) -> List:
 
     return fresh_posts
 
+
+if __name__ == "__main__":
+    # Example of how to use initialized PRAW client
+    print("Running redditcli.py...")
+    reddit = init_reddit_client("bot1", "basic")
+    print("Printing 10 hot posts from r/askreddit")
+    for i, submission in enumerate(reddit.subreddit("askreddit").hot(limit=10)):
+        print(i, submission.title)
