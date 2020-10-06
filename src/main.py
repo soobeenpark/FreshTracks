@@ -88,21 +88,123 @@ def retrieve_fresh(last_accessed_time, subreddit_name) -> List:
     return fresh_posts
 
 
+def is_valid_freshtype(freshtype) -> bool:
+    """Parses the freshtype string to see if it is "valid"
+
+    For which freshtypes are considered valid, see the documentation for
+    process_fresh().
+
+    Args:
+        freshtype (str): The freshtype tagged in the reddit post title.
+
+    Returns:
+        bool: True if valid freshtype, false if otherwise.
+    """
+    freshtype_lower = freshtype.lower()
+    valid_qualifiers = ["album", "ep", "single", "stream"]
+    if freshtype_lower == "fresh":
+        return True
+    elif any(vq in freshtype_lower for vq in valid_qualifiers):
+        return True
+    else:
+        return False
+    
+
+def parse_post_embdedded_media(media_description_str) -> dict:
+    """Parses the embedded Spotify media description in the reddit post
+
+    Args:
+        media_description_str (str): The post's Spotify media description str
+
+    Return:
+        dict: A dictionary containing parsed information from the arg.
+    """
+    desc_regex = re.compile(r"""^Listen\ to\s
+            (?P<title>.+)\s                 # Title
+            on\ Spotify.\s
+            (?P<artist>.+)\s                # Artist
+            (·)?\s
+            (?P<type>\w+)\s                 # Type
+            (·)?\s
+            (?P<year>\d+)                   # Year
+            (\s·\s(?P<num_songs>\d+)\ssongs)?    # Num songs (if exist)
+            .$""", re.VERBOSE)
+    match = desc_regex.search(media_description_str)
+
+    if match:
+        # Regex properly parsed
+        gd = match.groupdict()
+        if gd.get("num_songs", None) == None:
+            gd["num_songs"] = 1
+
+    else:
+        raise Exception("Error parsing in process_fresh()")
+    
+    return gd
+
+
+def parse_post_title(title_str) -> dict:
+    """Parses the post title
+
+    Args:
+        title_str (str): The post's title string.
+
+    Return:
+        dict: A dictionary containing parsed information from the arg.
+    """
+
+    title_regex = re.compile(r"""
+        \[\s*(?P<freshtype>fresh\s*\w*)\s*\]\s*     # FRESH type
+        ((?P<artist1>.+)\s                          # Artist1
+        -\s
+        (?P<title1>.+)                              # Title1
+        |
+        (?P<artist2>.+)                             # Artist2
+        -
+        (?P<title2>.+))                             # Title 2
+        """, re.VERBOSE | re.IGNORECASE)
+    match = title_regex.search(title_str)
+
+    if match:
+        # Regex properly parsed
+        gd = match.groupdict()
+        if gd["artist1"]:     # Regex matched artist1-title1 groups
+            assert(gd["title1"])
+            gd["artist"] = gd["artist1"]
+            gd["title"] = gd["title1"]
+        else:           # Regex matched artist2-title2 groups
+            assert(gd["artist2"] and gd["title2"])
+            gd["artist1"] = gd["artist2"]
+            gd["title1"] = gd["title2"]
+
+        gd["artist"] = re.sub(r"\(.*\)", "", gd["artist1"])
+        gd["title"] = re.sub(r"\(.*\)", "", gd["title1"])
+
+    else:
+        # No match found
+        gd = None
+
+    return gd
+
+
 def process_fresh(fresh_posts):
     """Separates out the fresh posts according to their specific type
 
     Posts tagged FRESH can be of any of the following types:
         1. [FRESH] - Usually meaning new singles, but not a strict convention.
         2. [FRESH ALBUM] - New album.
-        3. [FRESH STREAM] - Previously released song, but just now available on
+        3. [FRESH EP] - New EP.
+        4. [FRESH SINGLE] - New single.
+        5. [FRESH STREAM] - Previously released song, but just now available on
                             streaming platforms.
-        4. [FRESH PERFORMANCE] - New live performance, usually video.
+        6. [FRESH PERFORMANCE] - New live performance, usually video.
                                  Also, usually uploaded as a YouTube link.
-        5. [FRESH VIDEO] - New music video that has been released.
+        7. [FRESH VIDEO] - New music video that has been released.
 
 
-    The function only stores posts tagged [FRESH], [FRESH ALBUM], and
-    [FRESH STREAM] into the database, since we aren't interested in videos.
+    The function only stores "valid" posts tagged [FRESH], [FRESH ALBUM], 
+    [FRESH EP], [FRESH SINGLE], or [FRESH STREAM] into the database,
+    since we aren't interested in videos.
     
     Note that these conventions differ according to the subreddit, so it is
     advised to check the rules of the specific subreddit to make sure this
@@ -122,36 +224,24 @@ def process_fresh(fresh_posts):
         post_dict["ups"] = post.ups
 
         if post.media and "spotify" in post.media["oembed"]["provider_name"].lower():
-            # Artist and Title already provided by Spotify - capture that
-            pprint.pprint(post.media["oembed"]["description"])
-            desc_regex = re.compile(r"""^Listen\ to\s
-                    (?P<title>.+)\s                  # Title
-                    on\ Spotify.\s
-                    (?P<artist>.+)\s                  # Artist
-                    (·)?\s
-                    (?P<type>\w+)\s                 # Type
-                    (·)?\s
-                    (?P<year>\d+)                   # Year
-                    (\s·\s(?P<num_songs>\d+)\ssongs)?    # Num songs (if exist)
-                    .$""", re.VERBOSE)
-            match = desc_regex.search(post.media["oembed"]["description"])
-
-            if match:
-                # Regex properly parsed
-                gd = match.groupdict()
-                if gd.get("num_songs", None) == None:
-                    gd["num_songs"] = 1
-
-                post_dict.update(gd)
-            else:
-                raise Exception("Error parsing in process_fresh()")
+            # Artist and Title already provided by Spotify in Reddit embedded
+            # media. Just simply capture that string.
+            parsed_dict = parse_post_embdedded_media(post.media["oembed"]["description"])
 
         else:
             # Have to parse Artist and Title from post title,
-            # then search if that combo exists in Spotify
-            print()
+            # then search if that combo exists in Spotify.
+            # We make the (big) assumption that title is a string in the format
+            # of '[FRESH (____)] Artist - Title'
+            parsed_dict = parse_post_title(post.title)
+            if not parsed_dict:
+                # If no match able to be parsed, discard this post
+                continue
 
+        post_dict.update(parsed_dict)
         print(post_dict)
+        print()
+
 
 
 
