@@ -6,3 +6,5 @@ lib64
 praw.ini
 pyvenv.cfg
 share/
+src/__pycache__
+tmp/error.*
