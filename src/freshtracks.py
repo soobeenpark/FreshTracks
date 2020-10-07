@@ -39,6 +39,8 @@ class FreshTracks:
         # Get the date and time of the most recently added [FRESH] track
         self.last_accessed_time = self.get_last_accessed_time()
 
+        # How far ago we go to keep tracks active in playlist (ie. one week)
+        self.one_week_ago = datetime.now(timezone.utc) - timedelta(weeks=1)
 
 
     def get_last_accessed_time(self) -> datetime:
@@ -61,8 +63,7 @@ class FreshTracks:
             last_accessed_time = pytz.utc.localize(last_accessed_time) # tzaware
         except Post.DoesNotExist:
             # If no results in database, set last accessed to 1 week ago
-            last_accessed_time = datetime.now(
-                timezone.utc) - timedelta(weeks=1)
+            last_accessed_time = self.one_week_ago
 
         print("Last accessed: ", last_accessed_time)
         return last_accessed_time
@@ -215,7 +216,6 @@ class FreshTracks:
         prepared_posts = []
 
         for post in fresh_posts:
-            print(post.title)
             post_dict = dict()
             post_dict["reddit_post_id"] = post.id
             post_dict["created_utc"] = post.created_utc
@@ -318,6 +318,7 @@ class FreshTracks:
             posts_to_insert (list): A list of dicts, each containing
                                     info about a post.
         """
+        count = 0
         for p in posts_to_insert:
             post_obj = Post(**p)
             try:
@@ -327,14 +328,43 @@ class FreshTracks:
             except DuplicateKeyError:
                 # If post/album already exists, then discard this post
                 continue
+            count += 1
+            print("...Saving " + p["artist"] + " - " + p["title"] + " into DB")
+        print("Saved %d posts into DB" % count)
+
+
+    def refresh_upvotes(self):
+        """Refreshes upvotes on each post within past week.
+        """
+        posts_past_week = Post.objects.raw({"$and":
+                [{"created_utc": {"$gte": self.one_week_ago}},
+                {"subreddit": self.subreddit_name}]})
+        count = 0
+        for post in posts_past_week:
+            reddit_post_id = post.reddit_post_id
+            upvotes = self.rcli.reddit.submission(id=reddit_post_id).ups
+            post.upvotes = upvotes
+            post.save()
+            count += 1
+        print("Refreshed %d posts' upvotes" % count)
+
+
+    def update_playlist_ordered(self):
+        """Inserts/Updates tracks into Playlist in order.
+
+        Ensures that the playlist songs are in sorted order according to their
+        respective reddit upvote counts
+        """
+
 
 
     def run(self):
-        """Driver to run the whole program.
-        """
+        """Driver to run the whole program."""
 
         # Retrieve new posts in subreddit since last time script was run
         fresh_posts = self.rcli.retrieve_fresh(self.last_accessed_time,
+                self.subreddit_name)
+        print("Retrieved ", len(fresh_posts), " posts from ",
                 self.subreddit_name)
 
         # Filter new posts to only those with [FRESH] tags in them
@@ -348,3 +378,8 @@ class FreshTracks:
 
         # Save posts
         self.save_posts(posts_to_insert)
+
+        # Refresh upvotes on posts from past week
+        self.refresh_upvotes()
+
+        self.update_playlist_ordered()

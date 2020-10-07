@@ -8,6 +8,7 @@ file: redditcli.py
 """
 
 from datetime import datetime, timezone
+import pprint
 import praw
 import pytz
 from typing import List
@@ -55,7 +56,7 @@ class RedditCli:
                 submission.created_utc, tz=timezone.utc)
 
             # If we reach a post that we've already seen, break
-            if submission_created_time < last_accessed_time:
+            if submission_created_time <= last_accessed_time:
                 break
 
             # Add the new post to our list to process
@@ -63,5 +64,3 @@ class RedditCli:
                 fresh_posts.append(submission)
 
         return fresh_posts
-
-
