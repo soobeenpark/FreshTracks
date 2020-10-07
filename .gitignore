@@ -8,4 +8,4 @@ pyvenv.cfg
 share/
 src/__pycache__
 src/.cache
-tmp/error.log
+tmp/

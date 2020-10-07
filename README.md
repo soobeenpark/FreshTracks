@@ -22,7 +22,7 @@ Every hour:
     - The number of upvotes is refreshed and playlist sorted accordingly.
     - On each [FRESH] post with an album/EP, the most popular song is updated if it has changed within the past hour.\*
 
-\* A small caveat as a result is that the "added date" on the Spotify playlist may not 100% accurately represent how fresh the track is. This is because if the most popular track on an album/EP changed, then the older popular track has to be removed and the newer popular track inserted from the playlist, which updates the date added. However, this does not change when the album/EP track gets removed from the playlist, since that date is calculated by the original reddit post's created date.
+\* A small caveat as a result is that the "added date" on the Spotify playlist may not 100% accurately represent how fresh the track is. This is because if the most popular track on an album/EP changed, then the older popular track has to be removed and the newer popular track inserted from the playlist, which updates the date added. However, this does not change when the album/EP track gets removed from the playlist, since that date is calculated by the original reddit post's created date. However, these cases are **very rare**.
 
 
 # Running the script
@@ -38,5 +38,11 @@ Steps:
 Built using Python 3.8 (venv).
 Ubuntu 20.04 LTS.
 Please refer to `requirements.txt` to view the full list of dependencies used.
+
+Some of the main dependencies used are:
+1. PRAW - Python Reddit API Wrapper
+2. Spotipy - Python Spotify API Wrapper
+3. MongoDB + PyMongo - To store track and playlist data
+4. PyMODM - ODM/ORM-like layer above PyMongo
 
 In order to run this script, the username, password, app client_id, and app client_secret need to be set in a separate `praw.ini` config file.

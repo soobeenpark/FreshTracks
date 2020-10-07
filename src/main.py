@@ -8,9 +8,10 @@ file: main.py
 
 from datetime import datetime, timezone, timedelta
 import logging
+from models.post import Post
+from models.playlisttracks import PlaylistTracks
 import pprint
 import pymongo
-from pymongo import MongoClient
 import re
 import redditcli as rcli
 import spotifycli as scli
@@ -19,12 +20,13 @@ from spotipy.oauth2 import SpotifyOAuth
 import sys
 from typing import List
 
+from models.post import Post
+from models.playlisttracks import PlaylistTracks
 
-def get_last_accessed_time(db, subreddit_name) -> datetime:
+def get_last_accessed_time(subreddit_name) -> datetime:
     """Retrieve most recent datetime that is stored in the database.
 
     Args:
-        db (pymongo.database.Database): Connected MongoDB instance.
         subreddit_name (str): The name of the subreddit being accessed.
 
     Returns:
@@ -32,14 +34,10 @@ def get_last_accessed_time(db, subreddit_name) -> datetime:
     """
     # Find most recently posted song on subreddit
     last_accessed_time = 0
-    collection = db[subreddit_name]
-    cur = collection.find({}).sort('created_utc', pymongo.DESCENDING).limit(1)
-    results = list(cur)
-
-    if results:
-        last_inserted = results[0]
-        last_accessed_time = last_inserted['created_utc']
-    else:
+    try:
+        results = Post.objects.get({"subreddit": subreddit_name}).order_by("created_utc", pymongo.DESCENDING).limit(1)
+        last_accessed_time = results[0]
+    except Post.DoesNotExist:
         # If no results in database, set last accessed to 1 week ago
         last_accessed_time = datetime.now(timezone.utc) - timedelta(weeks=1)
 
@@ -176,7 +174,6 @@ def prepare_fresh_for_search(fresh_posts) -> List:
     function conforms to them.
 
     Params:
-        spot (spotify.Spotify): The initialized Spotify client.
         fresh_posts (List): The list of all retrieved submissions with FRESH in
                             the title, to be prepared.
 
@@ -242,7 +239,7 @@ def search_and_populate_posts(spot, prepared_posts) -> List:
         list: A list of dicts, where each element is a dict that contains
             the populated Spotify information for each post.
     """
-    posts_to_insert = []
+    populated_posts = []
 
     for prepared_post in prepared_posts:
         # Store the result in searched
@@ -279,9 +276,9 @@ def search_and_populate_posts(spot, prepared_posts) -> List:
         searched["upvotes"] = prepared_post["ups"]
 
         # Add to list
-        posts_to_insert.append(searched)
+        populated_posts.append(searched)
 
-    return posts_to_insert
+    return populated_posts
 
 
 def main():
@@ -294,10 +291,6 @@ def main():
     logger = logging.getLogger(__name__)
 
     try:
-        # Connect to local MongoDB instance
-        client = MongoClient()  # Connect to local mongo server
-        db = client.freshtracks  # Use freshtracks database
-
         # Initialize Reddit client
         reddit = rcli.init_reddit_client("bot1", "basic")
         subreddit_name = "indieheads"
@@ -306,7 +299,7 @@ def main():
         spot = scli.init_spotify_client()
 
         # Get the date and time of the most recently added [FRESH] track
-        last_accessed_time = get_last_accessed_time(db, subreddit_name)
+        last_accessed_time = get_last_accessed_time(subreddit_name)
 
         # Retrieve new posts in subreddit since last time script was run
         fresh_posts = rcli.retrieve_fresh(reddit, last_accessed_time,
@@ -316,7 +309,13 @@ def main():
         prepared_posts = prepare_fresh_for_search(fresh_posts)
 
         # Search and populate Reddit post with Spotify data
-        post_to_insert = search_and_populate_posts(spot, prepared_posts)
+        populated_posts = search_and_populate_posts(spot, prepared_posts,
+                subreddit_name)
+        # Finally, add subreddit_name to each post
+        posts_to_insert = [pp.update({"subreddit": subreddit_name}) 
+                for pp in populated_posts]
+
+        print(posts_to_insert)
 
     except Exception as e:
         print(e)
