@@ -9,6 +9,7 @@ file: redditcli.py
 
 from datetime import datetime, timezone
 import praw
+import pytz
 from typing import List
 
 
@@ -23,7 +24,7 @@ class RedditCli:
             config_interp (str): Setting to pass PRAW initializer.
         """
         self.reddit = praw.Reddit(botname, config_interpolation=config_interp)
-        self.limit_max = 1000   # Max amount of posts to retreive at once
+        self.limit_max = 100   # Max amount of posts to retreive at once
 
 
     def retrieve_fresh(self, last_accessed_time, subreddit_name) -> List:

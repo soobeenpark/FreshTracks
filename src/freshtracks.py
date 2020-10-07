@@ -9,6 +9,8 @@ file: freshtracks.py
 from datetime import datetime, timezone, timedelta
 import pprint
 import pymongo
+from pymongo.errors import DuplicateKeyError
+import pytz
 import re
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -34,6 +36,10 @@ class FreshTracks:
         self.scli = SpotifyCli()
         self.subreddit_name = subreddit_name
 
+        # Get the date and time of the most recently added [FRESH] track
+        self.last_accessed_time = self.get_last_accessed_time()
+
+
 
     def get_last_accessed_time(self) -> datetime:
         """Retrieve most recent datetime that is stored in the database.
@@ -48,10 +54,11 @@ class FreshTracks:
         # Find most recently posted song on subreddit
         last_accessed_time = 0
         try:
-            results = Post.objects.get({"subreddit": self.subreddit_name}) \
-                .order_by("created_utc", pymongo.DESCENDING) \
+            results = Post.objects.raw({"subreddit": self.subreddit_name}) \
+                .order_by([("created_utc", pymongo.DESCENDING)]) \
                 .limit(1)
-            last_accessed_time = results[0]
+            last_accessed_time = results[0].created_utc
+            last_accessed_time = pytz.utc.localize(last_accessed_time) # tzaware
         except Post.DoesNotExist:
             # If no results in database, set last accessed to 1 week ago
             last_accessed_time = datetime.now(
@@ -289,10 +296,9 @@ class FreshTracks:
                     searched = self.scli.populate_from_album(item)
 
             if not searched:
-                # If still not populated, then this post is unfortunately
-                # discarded.
+                # If still not populated, then this discard this post.
                 continue
-
+            
             # Finally add some of the existing relevant data in to the dict to
             # add
             searched["reddit_post_id"] = prepared_post["reddit_post_id"]
@@ -312,19 +318,23 @@ class FreshTracks:
             posts_to_insert (list): A list of dicts, each containing
                                     info about a post.
         """
-        posts = [Post(**p) for p in posts_to_insert]
-        Post.objects.bulk_create(posts)
+        for p in posts_to_insert:
+            post_obj = Post(**p)
+            try:
+                # force_insert will raise DuplicateKeyError instead of
+                # quietly overwriting existing document
+                post_obj.save(force_insert=True)
+            except DuplicateKeyError:
+                # If post/album already exists, then discard this post
+                continue
 
 
     def run(self):
         """Driver to run the whole program.
         """
 
-        # Get the date and time of the most recently added [FRESH] track
-        last_accessed_time = self.get_last_accessed_time()
-
         # Retrieve new posts in subreddit since last time script was run
-        fresh_posts = self.rcli.retrieve_fresh(last_accessed_time,
+        fresh_posts = self.rcli.retrieve_fresh(self.last_accessed_time,
                 self.subreddit_name)
 
         # Filter new posts to only those with [FRESH] tags in them
