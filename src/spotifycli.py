@@ -9,8 +9,9 @@ file: spotifycli.py
 
 import json
 import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials 
+from spotipy.oauth2 import SpotifyOAuth
 
+scope = "playlist-modify-public playlist-modify-private playlist-read-private"
 
 class SpotifyCli:
     """General class to help with interacting with Spotify API."""
@@ -24,8 +25,7 @@ class SpotifyCli:
             SPOTIPY_CLIENT_ID='your-spotify-client-id'
             SPOTIPY_CLIENT_SECRET='your-spotify-client-secret'
         """
-        auth_manager = SpotifyClientCredentials()
-        self.spot = spotipy.Spotify(auth_manager=auth_manager)
+        self.spot = spotipy.Spotify(auth_manager=SpotifyOAuth(scope=scope))
 
 
     def search(self, artist, title, type_str) -> json:
@@ -102,3 +102,43 @@ class SpotifyCli:
         populated["track"] = tracks["items"][0]["name"]
         populated["spotify_track_uri"] = tracks["items"][0]["uri"]
         return populated
+
+
+    def get_most_popular(self, spotify_album_uri) -> json:
+        """Retrieve the most popular track on album.
+
+        The popularity is determined by Spotify's algorithm.
+
+        Args:
+            spotify_album_uri (str): The Spotify album's URI.
+
+        Return:
+            json: The most popular track's info
+        """
+        # Get all tracks in album (Spotify sets limit max to 50)
+        tracks = self.spot.album_tracks(spotify_album_uri, limit=50)["items"]
+        
+        # Get full track info for each, not just simplified
+        tracks_full = [self.spot.track(tr["uri"]) for tr in tracks]
+
+        # Find most popular
+        most_popular = max(tracks_full, key=lambda x: x["popularity"])
+
+        return most_popular
+
+
+    def replace_track_at_pos(self, playlist_id, new_track_uri, pos):
+        """Replaces track in playlist at pos with track_to_insert.
+
+        Args:
+            playlist_id (str): Spotify playlist ID.
+            new_track_uri (str): Spotify track URI of new track to insert.
+            pos (int): Position of playlist to replace track at.
+        """
+        # Remove track at pos
+        self.spot.playlist_remove_specific_occurrences_of_items(
+                playlist_id, 
+                [{"uri": new_track_uri, "positions": [pos]}])
+
+        # Insert new track at same pos
+        self.spot.playlist_add_items(playlist_id, [new_track_uri], pos)

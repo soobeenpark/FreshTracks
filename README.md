@@ -10,10 +10,11 @@ On certain reddit subreddits such as r/indieheads, r/hiphopheads, or r/popheads,
 2. The tracks in the playlist are sorted according to their number of upvotes in each reddit post.  <br>
 This is a great way to see which of the recent songs are generating the most buzz within each subreddit.
 
-3. To sort by recently added date (freshest) instead of number of upvotes (default), simply sort by date using the mechanism Spotify provides.
+3. The time in which songs were added to the playlist mirrors the time they were posted on Reddit. <br>
+To sort by recently added date (freshest posted date on Reddit) instead of number of upvotes (default), simply sort by date using the mechanism Spotify provides.
 
 4. The reddit posts tagged [FRESH] are sometimes albums/EPs which contain multiple tracks.  <br>
-A decision was made to include only the most popular track (by Spotify's algorithm standards) on each [FRESH] album/EP, so as to avoid flooding the playlist with multiple tracks from the same artist and album.
+In which case, only the most popular track (according to Spotify's algorithm) from each album exists in the playlist.
 
 5. The playlist gets updated **every hour**. <br>
 Every hour:
@@ -22,7 +23,9 @@ Every hour:
     - The number of upvotes is refreshed and playlist sorted accordingly.
     - On each [FRESH] post with an album/EP, the most popular song is updated if it has changed within the past hour.\*
 
+<sub><sup>
 \* A small caveat as a result is that the "added date" on the Spotify playlist may not 100% accurately represent how fresh the track is. This is because if the most popular track on an album/EP changed, then the older popular track has to be removed and the newer popular track inserted from the playlist, which updates the date added. However, this does not change when the album/EP track gets removed from the playlist, since that date is calculated by the original reddit post's created date. However, these cases are **very rare**.
+</sup></sub>
 
 
 # Running the script

@@ -20,27 +20,30 @@ from typing import List
 from redditcli import RedditCli
 from spotifycli import SpotifyCli
 from models.post import Post
-from models.playlisttracks import PlaylistTracks
+from models.playlisttrack import PlaylistTrack
 
 
 class FreshTracks:
     """Class that contains most of the meat of the program."""
 
-    def __init__(self, subreddit_name):
+    def __init__(self, subreddit_setting):
         """Instantiates FreshTracks.
 
         Args:
-            subreddit_name (str): subreddit we are fetching from.
+            subreddit_setting (dict): Info needed for each subreddit.
         """
         self.rcli = RedditCli("bot1", "basic")
         self.scli = SpotifyCli()
-        self.subreddit_name = subreddit_name
+        self.subreddit_name = subreddit_setting["subreddit_name"]
+        self.upvote_thresh = subreddit_setting["upvote_thresh"]
+        self.playlist_id = subreddit_setting["playlist_id"]
+
+        # How far ago we go to keep tracks active in playlist (ie. one week)
+        self.one_week_ago = datetime.now(timezone.utc) - timedelta(weeks=1)
 
         # Get the date and time of the most recently added [FRESH] track
         self.last_accessed_time = self.get_last_accessed_time()
 
-        # How far ago we go to keep tracks active in playlist (ie. one week)
-        self.one_week_ago = datetime.now(timezone.utc) - timedelta(weeks=1)
 
 
     def get_last_accessed_time(self) -> datetime:
@@ -65,7 +68,7 @@ class FreshTracks:
             # If no results in database, set last accessed to 1 week ago
             last_accessed_time = self.one_week_ago
 
-        print("Last accessed: ", last_accessed_time)
+        print("\tLast accessed: ", last_accessed_time)
         return last_accessed_time
 
 
@@ -304,6 +307,8 @@ class FreshTracks:
             searched["reddit_post_id"] = prepared_post["reddit_post_id"]
             searched["created_utc"] = prepared_post["created_utc"]
             searched["upvotes"] = prepared_post["ups"]
+            searched["parsed_artist"] = artist
+            searched["parsed_title"] = title
 
             # Add to list
             populated_posts.append(searched)
@@ -329,8 +334,8 @@ class FreshTracks:
                 # If post/album already exists, then discard this post
                 continue
             count += 1
-            print("...Saving " + p["artist"] + " - " + p["title"] + " into DB")
-        print("Saved %d posts into DB" % count)
+            print("\t\t...Saving to DB: " + p["artist"] + " - " + p["track"])
+        print("\tAfter filtering, saved %d posts into DB" % count)
 
 
     def refresh_upvotes(self):
@@ -346,7 +351,83 @@ class FreshTracks:
             post.upvotes = upvotes
             post.save()
             count += 1
-        print("Refreshed %d posts' upvotes" % count)
+        print("\tRefreshed %d posts' upvotes" % count)
+
+
+    def remove_playlist_old(self):
+        """Removes stale tracks from Playlist.
+
+        Reflects changes to both Post and PlaylistTrack document.
+
+        """
+        playlisttracks = PlaylistTrack.objects \
+                .raw({"post.subreddit_name": self.subreddit_name}) \
+                .order_by([("playlist_position", pymongo.ASCENDING)])
+
+        num_removed = 0
+        for i, playlisttrack in enumerate(list(playlisttracks)):
+            # tzaware
+            created_utc = pytz.utc.localize(playlisttrack.post.created_utc)
+
+            if created_utc < self.one_week_ago or \
+                    playlisttrack.post.upvotes < self.upvote_thresh:
+
+                # Remove from collection
+                playlisttrack.delete()
+
+                # Remove from spotify playlist
+                self.scli.spot.playlist_remove_specific_occurrences_of_items(
+                        playlist_id=self.playlist_id,
+                        items=[{"uri": playlisttrack.post.spotify_track_uri,
+                            "positions": [i-num_removed]}])
+
+                # Update post
+                playlisttrack.post.exists_in_playlist = False
+                playlisttrack.post.save()
+
+                # Final increment
+                num_removed += 1
+
+            else:
+                # Adjust playlist position
+                playlisttrack.playlist_position = i-num_removed
+                playlisttrack.save()
+
+        print("\tRemoved %d stale/downvoted tracks from playlist" % num_removed)
+
+
+    def refresh_album_most_popular_track(self):
+        """Ensure that the most popular track of an album is in playlist.
+        """
+        # Get all tracks in playlist
+        playlist_posts = Post.objects.raw({"$and": 
+                [{"exists_in_playlist": True},
+                {"subreddit": self.subreddit_name}]})
+
+        count = 0
+        for post in list(playlist_posts):
+            track = self.scli.get_most_popular(post.spotify_album_uri)
+
+            # Update track if most popular changed
+            if track["uri"] != post.spotify_track_uri:
+                count += 1
+
+                # Update in Spotify playlist
+                playlisttrack = list(PlaylistTrack.objects \
+                        .raw({"_id": post.reddit_post_id}))[0]
+                pos = playlisttrack.playlist_position
+                self.scli.replace_track_at_pos(self.playlist_id, track["uri"], 
+                        pos)
+
+                # Update in DB
+                post.track = track["name"]
+                post.track_number = track["track_number"]
+                post.spotify_track_uri = track["uri"]
+                post.save()
+
+        if (count > 0):
+            print("\t%d tracks in playlist have been swapped out for the " \
+                "more popular track in same album!" % count)
 
 
     def update_playlist_ordered(self):
@@ -355,16 +436,57 @@ class FreshTracks:
         Ensures that the playlist songs are in sorted order according to their
         respective reddit upvote counts
         """
+        # Find posts to update the playlist with
+        posts = Post.objects.raw({"$and": 
+                [{"created_utc": {"$gte": self.one_week_ago}},
+                {"upvotes": {"$gte": self.upvote_thresh}},
+                {"subreddit": self.subreddit_name}]}) \
+                .order_by([("upvotes", pymongo.DESCENDING)])
 
+        
+        insert_count = 0
+        for i, post in enumerate(list(posts)):
+            if post.exists_in_playlist: # Reorder existing track
+                # Update playlist on Spotify
+                playlisttrack = list(PlaylistTrack.objects.
+                        raw({"_id": post.reddit_post_id}))[0]
+                
+
+                self.scli.spot.playlist_reorder_items(
+                        playlist_id=self.playlist_id,
+                        range_start=playlisttrack.playlist_position,
+                        insert_before=i)
+
+                # Update new playlist position in DB
+                playlisttrack.playlist_position = i
+                playlisttrack.save()
+
+            else:
+                insert_count += 1
+
+                # Insert to collection
+                PlaylistTrack(post=post, playlist_position=i) \
+                    .save(force_insert=True)
+
+                # Insert to Spotify playlist
+                self.scli.spot.playlist_add_items(playlist_id=self.playlist_id,
+                        items=[post.spotify_track_uri], position=i)
+
+                # Update post
+                post.exists_in_playlist = True
+                post.save()
+
+        
+        print("\tInserted %d new tracks into the playlist" % insert_count)
+        print("\tThere are now %d tracks in the playlist" % len(list(posts)))
 
 
     def run(self):
         """Driver to run the whole program."""
-
         # Retrieve new posts in subreddit since last time script was run
         fresh_posts = self.rcli.retrieve_fresh(self.last_accessed_time,
                 self.subreddit_name)
-        print("Retrieved ", len(fresh_posts), " posts from ",
+        print("\tRetrieved ", len(fresh_posts), " posts from ",
                 self.subreddit_name)
 
         # Filter new posts to only those with [FRESH] tags in them
@@ -382,4 +504,11 @@ class FreshTracks:
         # Refresh upvotes on posts from past week
         self.refresh_upvotes()
 
+        # Remove stale/downvoted posts
+        self.remove_playlist_old()
+
+        # Refresh which track of an album is most popular
+        self.refresh_album_most_popular_track()
+
+        # Insert/Update [FRESH] tracks in the playlist within past week
         self.update_playlist_ordered()

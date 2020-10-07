@@ -21,8 +21,21 @@ def main():
     logger = logging.getLogger(__name__)
 
     try:
-        subreddit_name = "indieheads"
-        freshtracks = FreshTracks(subreddit_name)
+        # Subreddit settings
+        indieheads = {"subreddit_name": "indieheads",
+                "upvote_thresh": 20,
+                "playlist_id": "3QlWwTD13vWFH6UOTH9514"}
+        hiphopheads = {"subreddit_name": "hiphopheads",
+                "upvote_thresh": 20,
+                "playlist_id": "3KwOTBOoSfymm3trVqr0oJ"}
+        popheads = {"subreddit_name": "popheads",
+                "upvote_thresh": 20,
+                "playlist_id": "72aULoyZowHVuHH1kETADA"}
+        subreddit_settings = [indieheads, hiphopheads, popheads]
+
+        # TODO: Go through each subreddit
+        subreddit_setting = subreddit_settings[0]
+        freshtracks = FreshTracks(subreddit_setting)
         freshtracks.run()
 
 

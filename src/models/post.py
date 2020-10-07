@@ -17,6 +17,8 @@ class Post(MongoModel):
     created_utc = fields.DateTimeField()
     upvotes = fields.IntegerField()
     exists_in_playlist = fields.BooleanField(default=False)
+    parsed_artist = fields.CharField()
+    parsed_title = fields.CharField()
 
     class Meta:
         connection_alias = "FreshTracks"
