@@ -75,13 +75,18 @@ def parse_post_embdedded_media(media_description_str) -> dict:
             gd["num_songs"] = 1
 
     else:
-        raise Exception("Error parsing in parse_post_embdedded_media()")
+        # raise Exception("Error parsing in parse_post_embdedded_media()")
+        # Return empty dict for fail to parse
+        return dict()
     
     return gd
 
 
 def parse_post_title(title_str) -> dict:
     """Parses the post title.
+
+    We assume that the post title must be of '[FRESH (____)] Artist - Title'.
+    Otherwise, an empty dict is returned.
 
     Args:
         title_str (str): The post's title string.
@@ -91,10 +96,12 @@ def parse_post_title(title_str) -> dict:
             If parsing failed or invalid freshtype, an empty dict is returned.
     """
 
+    # The regex below is divided into 2 different artist-title groups to account
+    # for any dashes/hyphens in the artist or title names
     title_regex = re.compile(r"""
         \[\s*(?P<freshtype>fresh\s*\w*)\s*\]\s*     # FRESH type
-        ((?P<artist1>.+)\s                          # Artist1
-        -\s
+        ((?P<artist1>.+)\s?                         # Artist1
+        -\s?
         (?P<title1>.+)                              # Title1
         |
         (?P<artist2>.+)                             # Artist2
@@ -193,14 +200,13 @@ def prepare_fresh_for_search(fresh_posts) -> List:
         post_dict["created_utc"] = post.created_utc
         post_dict["ups"] = post.ups
 
-        if post.media and "spotify" in post.media["oembed"]["provider_name"].lower():
+
+        has_embedded_media = post.media and "spotify" in post.media["oembed"]["provider_name"].lower()
+        if has_embedded_media:
             # Artist and Title already provided by Spotify in Reddit embedded
             # media. Just simply capture that string.
             parsed_dict = parse_post_embdedded_media(
                     post.media["oembed"]["description"])
-
-            # Add this value for ease of processing later
-            parsed_dict["embedded_media"] = True
 
         else:
             # Have to parse Artist and Title from post title,
@@ -208,13 +214,13 @@ def prepare_fresh_for_search(fresh_posts) -> List:
             # We make the (big) assumption that title is a string in the format
             # of '[FRESH (____)] Artist - Title'
             parsed_dict = parse_post_title(post.title)
-            if not parsed_dict:
-                # If no match able to be parsed, discard this post
-                continue
 
-            # Add this value for ease of processing later
-            parsed_dict["embedded_media"] = False
+        if not parsed_dict:
+            # If no match able to be parsed, discard this post
+            continue
 
+        # Add this value for ease of processing later
+        parsed_dict["has_embedded_media"] = has_embedded_media
         post_dict.update(parsed_dict)
         prepared_posts.append(post_dict)
 
@@ -251,7 +257,7 @@ def search_and_populate_posts(spot, prepared_posts) -> List:
         artist = prepared_post["artist"]
         title = prepared_post["title"]
 
-        if not prepared_post["embedded_media"]:
+        if not prepared_post["has_embedded_media"]:
             # First try to search based as a track
             search_resp = scli.search(spot, artist, title, "track")
             items = search_resp["tracks"]["items"]
