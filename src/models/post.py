@@ -4,6 +4,7 @@ connect("mongodb://localhost:27017/FreshTracks", alias="FreshTracks")
 
 class Post(MongoModel):
     reddit_post_id = fields.CharField(primary_key=True)
+    subreddit = fields.CharField()
     artist = fields.CharField()
     album = fields.CharField()
     album_type = fields.CharField()

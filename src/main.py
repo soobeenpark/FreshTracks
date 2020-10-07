@@ -287,6 +287,16 @@ def search_and_populate_posts(spot, prepared_posts) -> List:
     return populated_posts
 
 
+def save_posts(posts_to_insert):
+    """Saves the posts as documents in the Posts collection.
+
+    Args:
+        posts_to_insert (list): A list of dicts, each containing a post's info
+    """
+    posts = [Post(**p) for p in posts_to_insert]
+    Post.objects.bulk_create(posts)
+
+
 def main():
     """Script to execute.
     """
@@ -309,19 +319,19 @@ def main():
 
         # Retrieve new posts in subreddit since last time script was run
         fresh_posts = rcli.retrieve_fresh(reddit, last_accessed_time,
-                subreddit_name)
+               subreddit_name)
 
         # Filter new posts to only those with [FRESH] tags in them
         prepared_posts = prepare_fresh_for_search(fresh_posts)
 
         # Search and populate Reddit post with Spotify data
-        populated_posts = search_and_populate_posts(spot, prepared_posts,
-                subreddit_name)
+        populated_posts = search_and_populate_posts(spot, prepared_posts)
         # Finally, add subreddit_name to each post
-        posts_to_insert = [pp.update({"subreddit": subreddit_name}) 
+        posts_to_insert = [dict(pp, subreddit=subreddit_name) 
                 for pp in populated_posts]
 
-        print(posts_to_insert)
+        # Save posts
+        save_posts(posts_to_insert)
 
     except Exception as e:
         print(e)
