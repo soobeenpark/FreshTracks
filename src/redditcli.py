@@ -12,63 +12,55 @@ import praw
 from typing import List
 
 
-def init_reddit_client(botname, config_interp) -> praw.Reddit:
-    """Returns instantiated PRAW API client.
+class RedditCli:
+    """General class to help with interacting with Reddit API."""
 
-    Args:
-        botname (str): Name of bot in praw.ini file.
-        config_interp (str): Setting to pass PRAW initializer.
+    def __init__(self, botname, config_interp):
+        """Instantiated Reddit API client.
 
-    Return:
-        praw.Reddit: Initialized PRAW client.
-    """
-    reddit = praw.Reddit(botname, config_interpolation=config_interp)
-    return reddit
-
-
-def retrieve_fresh(reddit, last_accessed_time, subreddit_name) -> List:
-    """Retrieve all fresh posts in subreddit since script was last run.
-
-    In each of the posts, we make the assumption that the string "FRESH"
-    appears in each submission title with new music content.
-
-    Args:
-        reddit (praw.Reddit): Initialized reddit client.
-        last_accessed_time (int): utc time of most recent reddit post in DB.
-        subreddit_name (str): Name of the subreddit we are handling.
-
-    Returns:
-        list: The list of new posts since the script was last ran.
-    """
-
-    # Get subreddit that we want
-    subreddit = reddit.subreddit(subreddit_name)
-
-    # Initialize list to store only [FRESH] posts we haven't seen before
-    fresh_posts = []
-
-    # Add new posts from last hour into our fresh_posts list
-    limit_max = 1000
-    for submission in subreddit.new(limit=80):
-        # Get time that submission was created
-        submission_created_time = datetime.fromtimestamp(
-            submission.created_utc, tz=timezone.utc)
-
-        # If we reach a post that we've already seen, break
-        if submission_created_time < last_accessed_time:
-            break
-
-        # Add the new post to our list to process
-        if "FRESH" in submission.title:
-            fresh_posts.append(submission)
-
-    return fresh_posts
+        Args:
+            botname (str): Name of bot in praw.ini file.
+            config_interp (str): Setting to pass PRAW initializer.
+        """
+        self.reddit = praw.Reddit(botname, config_interpolation=config_interp)
+        self.limit_max = 1000   # Max amount of posts to retreive at once
 
 
-if __name__ == "__main__":
-    # Example of how to use initialized PRAW client
-    print("Running redditcli.py...")
-    reddit = init_reddit_client("bot1", "basic")
-    print("Printing 10 hot posts from r/askreddit")
-    for i, submission in enumerate(reddit.subreddit("askreddit").hot(limit=10)):
-        print(i, submission.title)
+    def retrieve_fresh(self, last_accessed_time, subreddit_name) -> List:
+        """Retrieve all fresh posts in subreddit since script was last run.
+
+        In each of the posts, we make the assumption that the string "FRESH"
+        appears in each submission title with new music content.
+
+        Args:
+            reddit (praw.Reddit): Initialized reddit client.
+            last_accessed_time (int): utc time of most recent reddit post in DB.
+            subreddit_name (str): Name of the subreddit we are handling.
+
+        Returns:
+            list: The list of new posts since the script was last ran.
+        """
+
+        # Get subreddit that we want
+        subreddit = self.reddit.subreddit(subreddit_name)
+
+        # Initialize list to store only [FRESH] posts we haven't seen before
+        fresh_posts = []
+
+        # Add new posts from last hour into our fresh_posts list
+        for submission in subreddit.new(limit=self.limit_max):
+            # Get time that submission was created
+            submission_created_time = datetime.fromtimestamp(
+                submission.created_utc, tz=timezone.utc)
+
+            # If we reach a post that we've already seen, break
+            if submission_created_time < last_accessed_time:
+                break
+
+            # Add the new post to our list to process
+            if "FRESH" in submission.title:
+                fresh_posts.append(submission)
+
+        return fresh_posts
+
+
