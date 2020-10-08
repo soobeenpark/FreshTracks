@@ -60,7 +60,9 @@ class RedditCli:
                 break
 
             # Add the new post to our list to process
-            if "FRESH" in submission.title:
+            link_flair_text = submission.link_flair_text
+            if "FRESH" in submission.title.upper() or \
+                    (link_flair_text and "FRESH" in link_flair_text.upper()):
                 fresh_posts.append(submission)
 
         return fresh_posts

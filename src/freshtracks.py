@@ -107,8 +107,58 @@ class FreshTracks:
         return gd
 
 
-    def parse_post_title(self, title_str) -> dict:
-        """Parses the post title.
+    def parse_post_title_wo_FRESH(self, freshtype, title_str) -> dict:
+        """Parses the post title, that does not contain [FRESH (___)] in title.
+
+        Args:
+            freshtype (str): The freshtype tagged in the reddit post.
+            title_str (str): The post's title string.
+
+        Return:
+            dict: A dictionary containing parsed information from the arg.
+                If parsing failed or invalid freshtype, empty dict is returned.
+        """
+        # Exit early if not a valid freshtype in title
+        if not freshtype or not self.is_valid_freshtype(freshtype):
+            return dict()
+
+        # The regex below is divided into 2 different artist-title groups to
+        # account for any dashes/hyphens in the artist or title names
+        title_regex = re.compile(r"""
+            ((?P<artist1>.+)\s?                         # Artist1
+            -\s?
+            (?P<title1>.+)                              # Title1
+            |
+            (?P<artist2>.+)                             # Artist2
+            -
+            (?P<title2>.+))                             # Title 2
+            """, re.VERBOSE | re.IGNORECASE)
+        match = title_regex.search(title_str)
+
+        return_dict = dict()
+        if match:
+            # Regex properly parsed
+            gd = match.groupdict()
+
+            if gd["artist1"]:     # Regex matched artist1-title1 groups
+                assert(gd["title1"])
+                gd["artist"] = gd["artist1"]
+                gd["title"] = gd["title1"]
+            else:           # Regex matched artist2-title2 groups
+                assert(gd["artist2"] and gd["title2"])
+                gd["artist1"] = gd["artist2"]
+                gd["title1"] = gd["title2"]
+
+            return_dict["artist"] = re.sub(
+                r"\(.*\)", "", gd["artist1"]).strip()
+            return_dict["title"] = re.sub(r"\(.*\)", "", gd["title1"]).strip()
+            return_dict["freshtype"] = freshtype
+
+        return return_dict
+
+
+    def parse_post_title_with_FRESH(self, title_str) -> dict:
+        """Parses the post title with FRESH in the title.
 
         We assume that the post title must be of '[FRESH (___)] Artist - Title'.
         Otherwise, an empty dict is returned.
@@ -169,7 +219,7 @@ class FreshTracks:
         prepare_fresh_for_search()
 
         Args:
-            freshtype (str): The freshtype tagged in the reddit post title.
+            freshtype (str): The freshtype tagged in the reddit post.
 
         Returns:
             bool: True if valid freshtype, false if otherwise.
@@ -185,7 +235,7 @@ class FreshTracks:
             return False
 
 
-    def prepare_fresh_for_search(self, fresh_posts) -> List:
+    def parse_fresh(self, fresh_posts) -> List:
         """Parses the post details so that they are ready to search in Spotify.
 
         Posts tagged FRESH can be of any of the following types:
@@ -219,32 +269,44 @@ class FreshTracks:
         prepared_posts = []
 
         for post in fresh_posts:
-            post_dict = dict()
-            post_dict["reddit_post_id"] = post.id
-            post_dict["created_utc"] = post.created_utc
-            post_dict["ups"] = post.ups
-
             has_embedded_media = post.media and \
                     "spotify" in post.media["oembed"]["provider_name"].lower()
-            if has_embedded_media:
+
+            parsed_dict = dict()
+            if has_embedded_media and "description" in post.media["oembed"]:
                 # Artist and Title already provided by Spotify in Reddit
                 # embedded media. Just simply capture that string.
                 parsed_dict = self.parse_post_embdedded_media(
                     post.media["oembed"]["description"])
 
-            else:
+            if not parsed_dict:
+                # Post doesn't have appropriate embedded media.
                 # Have to parse Artist and Title from post title,
                 # then search if that combo exists in Spotify.
-                parsed_dict = self.parse_post_title(post.title)
+                if self.subreddit_name in ("indieheads", "hiphopheads"):
+                    parsed_dict = self.parse_post_title_with_FRESH(post.title)
+
+                elif self.subreddit_name in ("popheads") and \
+                        "link_flair_text" in vars(post):
+                    parsed_dict = self.parse_post_title_wo_FRESH( \
+                            post.link_flair_text, post.title)
+
+                else:
+                    raise Exception("Select parsing method for subreddit " + \
+                            self.subreddit_name)
 
             if not parsed_dict:
                 # If no match able to be parsed, discard this post
                 continue
 
-            # Add this value for ease of processing later
+            # Add rest of relevant values
+            parsed_dict["reddit_post_id"] = post.id
+            parsed_dict["created_utc"] = post.created_utc
+            parsed_dict["ups"] = post.ups
+            # Add this for ease of processing later
             parsed_dict["has_embedded_media"] = has_embedded_media
-            post_dict.update(parsed_dict)
-            prepared_posts.append(post_dict)
+
+            prepared_posts.append(parsed_dict)
 
         return prepared_posts
 
@@ -289,8 +351,8 @@ class FreshTracks:
                     searched = self.scli.populate_from_track(item)
 
             if not searched:
-                # Search by track above didn't get applied, because either
-                # embedded_media or search by track failed. So now search by
+                # Search by track above didn't get applied, because either has
+                # embedded media or search by track failed. So now search by
                 # album.
                 search_resp = self.scli.search(artist, title, "album")
                 items = search_resp["albums"]["items"]
@@ -400,7 +462,8 @@ class FreshTracks:
         """Ensure that the most popular track of an album is in playlist.
         """
         # Get all tracks in playlist
-        playlisttracks = PlaylistTrack.objects.all() \
+        playlisttracks = PlaylistTrack.objects \
+                .raw({"post.subreddit_name": self.subreddit_name}) \
                 .order_by([("playlist_position", pymongo.ASCENDING)])
 
         playlist_posts = [pt.post for pt in playlisttracks]
@@ -490,8 +553,9 @@ class FreshTracks:
         print("\tRetrieved ", len(fresh_posts), " posts from ",
                 self.subreddit_name)
 
+        
         # Filter new posts to only those with [FRESH] tags in them
-        prepared_posts = self.prepare_fresh_for_search(fresh_posts)
+        prepared_posts = self.parse_fresh(fresh_posts)
 
         # Search and populate Reddit post with Spotify data
         populated_posts = self.search_and_populate_posts(prepared_posts)

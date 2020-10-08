@@ -33,11 +33,11 @@ def main():
                 "playlist_id": "72aULoyZowHVuHH1kETADA"}
         subreddit_settings = [indieheads, hiphopheads, popheads]
 
-        # TODO: Go through each subreddit
-        print("Getting FreshTracks from r/" + subreddit_settings[1]["subreddit_name"])
-        subreddit_setting = subreddit_settings[1]
-        freshtracks = FreshTracks(subreddit_setting)
-        freshtracks.run()
+        for subreddit_setting in subreddit_settings:
+            print("Getting FreshTracks from r/" + subreddit_setting["subreddit_name"])
+            freshtracks = FreshTracks(subreddit_setting)
+            freshtracks.run()
+            print()
 
 
     except Exception as e:
