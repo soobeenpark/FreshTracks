@@ -34,7 +34,8 @@ def main():
         subreddit_settings = [indieheads, hiphopheads, popheads]
 
         # TODO: Go through each subreddit
-        subreddit_setting = subreddit_settings[0]
+        print("Getting FreshTracks from r/" + subreddit_settings[1]["subreddit_name"])
+        subreddit_setting = subreddit_settings[1]
         freshtracks = FreshTracks(subreddit_setting)
         freshtracks.run()
 

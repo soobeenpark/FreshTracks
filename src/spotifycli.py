@@ -68,6 +68,7 @@ class SpotifyCli:
         populated["total_tracks"] = item["album"]["total_tracks"]
         populated["track_num"] = item["track_number"]
         populated["spotify_track_uri"] = item["uri"]
+        
         return populated
 
 
@@ -101,6 +102,7 @@ class SpotifyCli:
 
         populated["track"] = tracks["items"][0]["name"]
         populated["spotify_track_uri"] = tracks["items"][0]["uri"]
+
         return populated
 
 
@@ -127,18 +129,20 @@ class SpotifyCli:
         return most_popular
 
 
-    def replace_track_at_pos(self, playlist_id, new_track_uri, pos):
+    def replace_track_at_pos(self, playlist_id, old_track_uri, new_track_uri,
+            pos):
         """Replaces track in playlist at pos with track_to_insert.
 
         Args:
             playlist_id (str): Spotify playlist ID.
+            old_track_uri (str): Spotify track URI of old track to remove.
             new_track_uri (str): Spotify track URI of new track to insert.
             pos (int): Position of playlist to replace track at.
         """
         # Remove track at pos
         self.spot.playlist_remove_specific_occurrences_of_items(
                 playlist_id, 
-                [{"uri": new_track_uri, "positions": [pos]}])
+                [{"uri": old_track_uri, "positions": [pos]}])
 
         # Insert new track at same pos
         self.spot.playlist_add_items(playlist_id, [new_track_uri], pos)

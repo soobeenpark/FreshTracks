@@ -396,16 +396,17 @@ class FreshTracks:
         print("\tRemoved %d stale/downvoted tracks from playlist" % num_removed)
 
 
-    def refresh_album_most_popular_track(self):
+    def replace_album_most_popular_track(self):
         """Ensure that the most popular track of an album is in playlist.
         """
         # Get all tracks in playlist
-        playlist_posts = Post.objects.raw({"$and": 
-                [{"exists_in_playlist": True},
-                {"subreddit": self.subreddit_name}]})
+        playlisttracks = PlaylistTrack.objects.all() \
+                .order_by([("playlist_position", pymongo.ASCENDING)])
+
+        playlist_posts = [pt.post for pt in playlisttracks]
 
         count = 0
-        for post in list(playlist_posts):
+        for post in playlist_posts:
             track = self.scli.get_most_popular(post.spotify_album_uri)
 
             # Update track if most popular changed
@@ -416,8 +417,8 @@ class FreshTracks:
                 playlisttrack = list(PlaylistTrack.objects \
                         .raw({"_id": post.reddit_post_id}))[0]
                 pos = playlisttrack.playlist_position
-                self.scli.replace_track_at_pos(self.playlist_id, track["uri"], 
-                        pos)
+                self.scli.replace_track_at_pos(self.playlist_id, 
+                        playlisttrack.post.spotify_track_uri, track["uri"], pos)
 
                 # Update in DB
                 post.track = track["name"]
@@ -508,7 +509,7 @@ class FreshTracks:
         self.remove_playlist_old()
 
         # Refresh which track of an album is most popular
-        self.refresh_album_most_popular_track()
+        self.replace_album_most_popular_track()
 
         # Insert/Update [FRESH] tracks in the playlist within past week
         self.update_playlist_ordered()
