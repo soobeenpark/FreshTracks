@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
-"""TODO: Add documentation 
+"""Automatically updates Spotify playlists from [FRESH] tagged Reddit posts.
 
 author: Soobeen Park
 file: main.py
 """
 
+import os
 from freshtracks import FreshTracks
 import logging
 import sys
@@ -14,9 +15,15 @@ import sys
 def main():
     """Script to execute.
     """
+    # Setup directory for logging files
+    log_files_path = "../tmp/"
+    if not os.path.exists(log_files_path):
+        os.makedirs(log_files_path)
+
     # Setup logger to log any exceptions
     log_format_str = "%(asctime)s %(levelname)s %(name)s %(message)s"
-    logging.basicConfig(filename="./tmp/error.log", level=logging.ERROR,
+    logging.basicConfig(filename=log_files_path + "error.log",
+            level=logging.ERROR,
             format=log_format_str)
     logger = logging.getLogger(__name__)
 

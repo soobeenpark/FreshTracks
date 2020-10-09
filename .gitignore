@@ -9,3 +9,5 @@ share/
 src/__pycache__
 src/.cache
 src/models/__pycache__
+tmp/
+*.log

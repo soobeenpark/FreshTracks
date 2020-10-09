@@ -20,13 +20,15 @@ class SpotifyCli:
     def __init__(self):
         """Instantiates Spotify API Client.
 
-        Uses Client Credential Flow for authentication.
+        Uses Authentication Code Flow for authentication.
 
         NOTE: This function assumes that the following environment vars are set.
             SPOTIPY_CLIENT_ID='your-spotify-client-id'
             SPOTIPY_CLIENT_SECRET='your-spotify-client-secret'
+            SPOTIPY_REDIRECT_URI='your-spotipy-redirect-uri'
         """
-        self.spot = spotipy.Spotify(auth_manager=SpotifyOAuth(scope=scope))
+        auth_manager = SpotifyOAuth(scope=scope)
+        self.spot = spotipy.Spotify(auth_manager=auth_manager)
         # (Spotify sets limit max to 50)
         self.album_tracks_limit = 50
 
