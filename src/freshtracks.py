@@ -100,7 +100,6 @@ class FreshTracks:
                 gd["num_songs"] = 1
 
         else:
-            # raise Exception("Error parsing in parse_post_embdedded_media()")
             # Return empty dict for fail to parse
             return dict()
 
@@ -235,6 +234,29 @@ class FreshTracks:
             return False
 
 
+    def has_embedded_media(self, post) -> bool:
+        """Helper method to check if post has embedded media we can use.
+
+        Args:
+            post (json): The Reddit post submission.
+
+        Return:
+            bool: True if the post has embedded Spotify media with valid 
+                description, False otherwise.
+        """
+        if not post.media:
+            return False
+        if "oembed" not in post.media:
+            return False
+        if "provider_name" not in post.media.get("oembed"):
+            return False
+        if "description" not in post.media.get("oembed"):
+            return False
+        if "spotify" not in post.media["oembed"]["provider_name"].lower():
+            return False
+        return True
+
+
     def parse_fresh(self, fresh_posts) -> List:
         """Parses the post details so that they are ready to search in Spotify.
 
@@ -269,11 +291,9 @@ class FreshTracks:
         prepared_posts = []
 
         for post in fresh_posts:
-            has_embedded_media = post.media and \
-                    "spotify" in post.media["oembed"]["provider_name"].lower()
-
             parsed_dict = dict()
-            if has_embedded_media and "description" in post.media["oembed"]:
+
+            if self.has_embedded_media(post):
                 # Artist and Title already provided by Spotify in Reddit
                 # embedded media. Just simply capture that string.
                 parsed_dict = self.parse_post_embdedded_media(
@@ -304,7 +324,7 @@ class FreshTracks:
             parsed_dict["created_utc"] = post.created_utc
             parsed_dict["ups"] = post.ups
             # Add this for ease of processing later
-            parsed_dict["has_embedded_media"] = has_embedded_media
+            parsed_dict["has_embedded_media"] = self.has_embedded_media(post)
 
             prepared_posts.append(parsed_dict)
 
