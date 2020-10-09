@@ -14,6 +14,7 @@ import sys
 def main():
     """Script to execute.
     """
+    """
     # Setup logger to log any exceptions
     log_format_str = "%(asctime)s %(levelname)s %(name)s %(message)s"
     logging.basicConfig(filename="../tmp/error.log", level=logging.ERROR,
@@ -21,31 +22,34 @@ def main():
     logger = logging.getLogger(__name__)
 
     try:
-        # Subreddit settings
-        indieheads = {"subreddit_name": "indieheads",
-                "upvote_thresh": 20,
-                "playlist_id": "3QlWwTD13vWFH6UOTH9514"}
-        hiphopheads = {"subreddit_name": "hiphopheads",
-                "upvote_thresh": 20,
-                "playlist_id": "3KwOTBOoSfymm3trVqr0oJ"}
-        popheads = {"subreddit_name": "popheads",
-                "upvote_thresh": 20,
-                "playlist_id": "72aULoyZowHVuHH1kETADA"}
-        subreddit_settings = [indieheads, hiphopheads, popheads]
+    """
+    # Subreddit settings
+    indieheads = {"subreddit_name": "indieheads",
+            "upvote_thresh": 20,
+            "playlist_id": "3QlWwTD13vWFH6UOTH9514"}
+    hiphopheads = {"subreddit_name": "hiphopheads",
+            "upvote_thresh": 20,
+            "playlist_id": "3KwOTBOoSfymm3trVqr0oJ"}
+    popheads = {"subreddit_name": "popheads",
+            "upvote_thresh": 20,
+            "playlist_id": "72aULoyZowHVuHH1kETADA"}
+    subreddit_settings = [indieheads, hiphopheads, popheads]
 
-        for subreddit_setting in subreddit_settings:
-            print("Getting FreshTracks from r/" + subreddit_setting["subreddit_name"])
-            freshtracks = FreshTracks(subreddit_setting)
-            freshtracks.run()
-            print()
+    for subreddit_setting in subreddit_settings:
+        print("Getting FreshTracks from r/" + subreddit_setting["subreddit_name"])
+        freshtracks = FreshTracks(subreddit_setting)
+        freshtracks.run()
+        print()
 
 
+    """
     except Exception as e:
         print(e)
         # Log and exit program
         print("Exception caught")
         logger.exception(e)
         sys.exit(1)
+    """
 
 
 if __name__ == "__main__":

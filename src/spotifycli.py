@@ -8,6 +8,7 @@ file: spotifycli.py
 """
 
 import json
+import pprint
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
@@ -26,7 +27,8 @@ class SpotifyCli:
             SPOTIPY_CLIENT_SECRET='your-spotify-client-secret'
         """
         self.spot = spotipy.Spotify(auth_manager=SpotifyOAuth(scope=scope))
-
+        # (Spotify sets limit max to 50)
+        self.album_tracks_limit = 50
 
     def search(self, artist, title, type_str) -> json:
         """Search an artist + title combo in Spotify.
@@ -117,11 +119,15 @@ class SpotifyCli:
         Return:
             json: The most popular track's info
         """
-        # Get all tracks in album (Spotify sets limit max to 50)
-        tracks = self.spot.album_tracks(spotify_album_uri, limit=50)["items"]
+        # Get all tracks in album 
+        tracks = self.spot.album_tracks(spotify_album_uri, 
+                limit=self.album_tracks_limit)["items"]
         
         # Get full track info for each, not just simplified
-        tracks_full = [self.spot.track(tr["uri"]) for tr in tracks]
+        track_ids = [t.get("uri", "") for t in tracks]
+        tracks_full = self.spot.tracks(track_ids).get("tracks")
+        if not tracks_full:
+            return {}
 
         # Find most popular
         most_popular = max(tracks_full, key=lambda x: x["popularity"])

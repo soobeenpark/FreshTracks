@@ -442,8 +442,13 @@ class FreshTracks:
         Reflects changes to both Post and PlaylistTrack document.
 
         """
+        posts = Post.objects.raw({"$and": 
+            [{"subreddit": self.subreddit_name},
+                {"exists_in_playlist": True}]})
+        post_ids = [p.reddit_post_id for p in posts]
+        # Get all tracks in playlist in order
         playlisttracks = PlaylistTrack.objects \
-                .raw({"post.subreddit_name": self.subreddit_name}) \
+                .raw({"_id": {"$in": post_ids}}) \
                 .order_by([("playlist_position", pymongo.ASCENDING)])
 
         num_removed = 0
@@ -451,8 +456,11 @@ class FreshTracks:
             # tzaware
             created_utc = pytz.utc.localize(playlisttrack.post.created_utc)
 
+            post = playlisttrack.post
             if created_utc < self.one_week_ago or \
-                    playlisttrack.post.upvotes < self.upvote_thresh:
+                    post.upvotes < self.upvote_thresh:
+
+                print("\t\t>>> Removing " + post.artist + " - " + post.track)
 
                 # Remove from collection
                 playlisttrack.delete()
@@ -460,12 +468,12 @@ class FreshTracks:
                 # Remove from spotify playlist
                 self.scli.spot.playlist_remove_specific_occurrences_of_items(
                         playlist_id=self.playlist_id,
-                        items=[{"uri": playlisttrack.post.spotify_track_uri,
+                        items=[{"uri": post.spotify_track_uri,
                             "positions": [i-num_removed]}])
 
                 # Update post
-                playlisttrack.post.exists_in_playlist = False
-                playlisttrack.post.save()
+                post.exists_in_playlist = False
+                post.save()
 
                 # Final increment
                 num_removed += 1
@@ -481,16 +489,23 @@ class FreshTracks:
     def replace_album_most_popular_track(self):
         """Ensure that the most popular track of an album is in playlist.
         """
-        # Get all tracks in playlist
+        # Get all posts from subreddit that are in playlist
+        posts = Post.objects.raw({"$and": 
+            [{"subreddit": self.subreddit_name},
+                {"exists_in_playlist": True}]})
+        post_ids = [p.reddit_post_id for p in posts]
+        # Get all tracks in playlist in order
         playlisttracks = PlaylistTrack.objects \
-                .raw({"post.subreddit_name": self.subreddit_name}) \
+                .raw({"_id": {"$in": post_ids}}) \
                 .order_by([("playlist_position", pymongo.ASCENDING)])
 
-        playlist_posts = [pt.post for pt in playlisttracks]
-
         count = 0
-        for post in playlist_posts:
+        for playlisttrack in list(playlisttracks):
+            post = playlisttrack.post
             track = self.scli.get_most_popular(post.spotify_album_uri)
+            if not track:
+                # couldn't find most popular track
+                continue
 
             # Update track if most popular changed
             if track["uri"] != post.spotify_track_uri:
@@ -500,6 +515,7 @@ class FreshTracks:
                 playlisttrack = list(PlaylistTrack.objects \
                         .raw({"_id": post.reddit_post_id}))[0]
                 pos = playlisttrack.playlist_position
+
                 self.scli.replace_track_at_pos(self.playlist_id, 
                         playlisttrack.post.spotify_track_uri, track["uri"], pos)
 
@@ -508,6 +524,9 @@ class FreshTracks:
                 post.track_number = track["track_number"]
                 post.spotify_track_uri = track["uri"]
                 post.save()
+                playlisttrack.delete()
+                PlaylistTrack(post=post, playlist_position=pos).save()
+
 
         if (count > 0):
             print("\t%d tracks in playlist have been swapped out for the " \
@@ -545,8 +564,9 @@ class FreshTracks:
                 playlisttrack.playlist_position = i
                 playlisttrack.save()
 
-            else:
+            else: # Insert track that didn't exist in playlist
                 insert_count += 1
+                print("\t\t<<< Inserting " + post.artist + " - " + post.track)
 
                 # Insert to collection
                 PlaylistTrack(post=post, playlist_position=i) \
