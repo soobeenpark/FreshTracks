@@ -37,7 +37,7 @@ The script uses a Mongo database to keep track of [FRESH] tracks in the playlist
 Steps.
 
 0. Clone the repository.  <br>
-1. Setup the PRAW and Spotipy client IDs and secret keys using `praw.ini` and environment variables.  <br>
+1. Setup the PRAW and Spotipy client IDs and secret keys using `praw.ini` and environment variables in `runme.sh`.  <br>
 2. Install MongoDB server as instructed in their documentation.  <br>
 3. Install Python dependencies using `pip install -r requirements.txt` (Python venv recommended).  <br>
 4. Setup cron job to run the script every hour.  <br>
@@ -53,5 +53,3 @@ The main dependencies used are:
 4. PyMODM - ODM/ORM-like layer above PyMongo
 
 Please refer to `requirements.txt` to view the full list of dependencies used. <br>
-
-In order to run this script, the username, password, app client\_id, and app client\_secret need to be set in a separate `praw.ini` config file.
