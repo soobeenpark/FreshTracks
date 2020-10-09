@@ -16,7 +16,7 @@ def main():
     """
     # Setup logger to log any exceptions
     log_format_str = "%(asctime)s %(levelname)s %(name)s %(message)s"
-    logging.basicConfig(filename="../tmp/error.log", level=logging.ERROR,
+    logging.basicConfig(filename="./tmp/error.log", level=logging.ERROR,
             format=log_format_str)
     logger = logging.getLogger(__name__)
 
