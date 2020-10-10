@@ -452,6 +452,7 @@ class FreshTracks:
                 .order_by([("playlist_position", pymongo.ASCENDING)])
 
         num_removed = 0
+        tracks_to_remove = []
         for i, playlisttrack in enumerate(list(playlisttracks)):
             # tzaware
             created_utc = pytz.utc.localize(playlisttrack.post.created_utc)
@@ -465,11 +466,10 @@ class FreshTracks:
                 # Remove from collection
                 playlisttrack.delete()
 
-                # Remove from spotify playlist
-                self.scli.spot.playlist_remove_specific_occurrences_of_items(
-                        playlist_id=self.playlist_id,
-                        items=[{"uri": post.spotify_track_uri,
-                            "positions": [i-num_removed]}])
+                # Add track to remove it later
+                assert(i == playlisttrack.playlist_position)
+                tracks_to_remove.append({"uri": post.spotify_track_uri,
+                    "positions": [i]})
 
                 # Update post
                 post.exists_in_playlist = False
@@ -483,6 +483,10 @@ class FreshTracks:
                 playlisttrack.playlist_position = i-num_removed
                 playlisttrack.save()
 
+        # Remove all appropriate tracks from Spotify playlist
+        self.scli.spot.playlist_remove_specific_occurrences_of_items(
+                playlist_id=self.playlist_id, items=tracks_to_remove)
+        assert(num_removed == len(tracks_to_remove))
         print("\tRemoved %d stale/downvoted tracks from playlist" % num_removed)
 
 
@@ -504,7 +508,7 @@ class FreshTracks:
             post = playlisttrack.post
             track = self.scli.get_most_popular(post.spotify_album_uri)
             if not track:
-                # couldn't find most popular track
+                # couldn't find most popular track.
                 continue
 
             # Update track if most popular changed
@@ -528,9 +532,8 @@ class FreshTracks:
                 PlaylistTrack(post=post, playlist_position=pos).save()
 
 
-        if (count > 0):
-            print("\t%d tracks in playlist have been swapped out for the " \
-                "more popular track in same album!" % count)
+        print("\t%d tracks in playlist have been swapped out for the " \
+            "more popular track in same album!" % count)
 
 
     def update_playlist_ordered(self):
