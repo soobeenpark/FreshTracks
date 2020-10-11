@@ -8,6 +8,7 @@ file: freshtracks.py
 
 from datetime import datetime, timezone, timedelta
 import pprint
+import pymodm
 import pymongo
 from pymongo.errors import DuplicateKeyError
 import pytz
@@ -70,6 +71,36 @@ class FreshTracks:
 
         print("\tLast accessed: ", last_accessed_time)
         return last_accessed_time
+
+
+    def get_playlisttracks_ordered(self) -> pymodm.queryset.QuerySet:
+        """Helper method to get the tracks currently in the playlist
+        
+        Return:
+            QuerySet: All tracks in playlist in sorted order.
+        """
+        # Get all posts from subreddit that are in playlist
+        posts = Post.objects.raw({"$and": 
+            [{"subreddit": self.subreddit_name},
+                {"exists_in_playlist": True}]})
+        post_ids = [p.reddit_post_id for p in posts]
+        # Get all tracks in playlist in order
+        playlisttracks = PlaylistTrack.objects \
+                .raw({"_id": {"$in": post_ids}}) \
+                .order_by([("playlist_position", pymongo.ASCENDING)])
+        
+        return playlisttracks
+
+
+    def print_current_playlist(self):
+        """Helper method to print out playlist in order.
+        Useful for debugging purposes.
+        """
+        playlisttracks = self.get_playlisttracks_ordered()
+        for playlisttrack in playlisttracks:
+            post = playlisttrack.post
+            pos = playlisttrack.playlist_position
+            print(pos, post.artist + "-" + post.track, post.upvotes)
 
 
     def parse_post_embdedded_media(self, media_description_str) -> dict:
@@ -442,16 +473,9 @@ class FreshTracks:
         Reflects changes to both Post and PlaylistTrack document.
 
         """
-        posts = Post.objects.raw({"$and": 
-            [{"subreddit": self.subreddit_name},
-                {"exists_in_playlist": True}]})
-        post_ids = [p.reddit_post_id for p in posts]
-        # Get all tracks in playlist in order
-        playlisttracks = PlaylistTrack.objects \
-                .raw({"_id": {"$in": post_ids}}) \
-                .order_by([("playlist_position", pymongo.ASCENDING)])
+        playlisttracks = self.get_playlisttracks_ordered()
 
-        num_removed = 0
+        remove_count = 0
         tracks_to_remove = []
         for i, playlisttrack in enumerate(list(playlisttracks)):
             # tzaware
@@ -463,9 +487,6 @@ class FreshTracks:
 
                 print("\t\t>>> Removing " + post.artist + " - " + post.track)
 
-                # Remove from collection
-                playlisttrack.delete()
-
                 # Add track to remove it later
                 assert(i == playlisttrack.playlist_position)
                 tracks_to_remove.append({"uri": post.spotify_track_uri,
@@ -475,33 +496,29 @@ class FreshTracks:
                 post.exists_in_playlist = False
                 post.save()
 
+                # Remove from collection
+                playlisttrack.delete()
+
                 # Final increment
-                num_removed += 1
+                remove_count += 1
 
             else:
                 # Adjust playlist position
-                playlisttrack.playlist_position = i-num_removed
+                playlisttrack.playlist_position = i-remove_count
                 playlisttrack.save()
 
         # Remove all appropriate tracks from Spotify playlist
+        assert(remove_count == len(tracks_to_remove))
         self.scli.spot.playlist_remove_specific_occurrences_of_items(
                 playlist_id=self.playlist_id, items=tracks_to_remove)
-        assert(num_removed == len(tracks_to_remove))
-        print("\tRemoved %d stale/downvoted tracks from playlist" % num_removed)
+        print("\tRemoved %d stale/downvoted tracks from playlist" % remove_count)
 
 
     def replace_album_most_popular_track(self):
         """Ensure that the most popular track of an album is in playlist.
         """
         # Get all posts from subreddit that are in playlist
-        posts = Post.objects.raw({"$and": 
-            [{"subreddit": self.subreddit_name},
-                {"exists_in_playlist": True}]})
-        post_ids = [p.reddit_post_id for p in posts]
-        # Get all tracks in playlist in order
-        playlisttracks = PlaylistTrack.objects \
-                .raw({"_id": {"$in": post_ids}}) \
-                .order_by([("playlist_position", pymongo.ASCENDING)])
+        playlisttracks = self.get_playlisttracks_ordered()
 
         count = 0
         for playlisttrack in list(playlisttracks):
@@ -553,11 +570,10 @@ class FreshTracks:
         insert_count = 0
         for i, post in enumerate(list(posts)):
             if post.exists_in_playlist: # Reorder existing track
-                # Update playlist on Spotify
                 playlisttrack = list(PlaylistTrack.objects.
                         raw({"_id": post.reddit_post_id}))[0]
                 
-
+                # Update playlist on Spotify
                 self.scli.spot.playlist_reorder_items(
                         playlist_id=self.playlist_id,
                         range_start=playlisttrack.playlist_position,
@@ -614,9 +630,15 @@ class FreshTracks:
 
         # Remove stale/downvoted posts
         self.remove_playlist_old()
+        print("After removing:")
+        self.print_current_playlist()
 
         # Refresh which track of an album is most popular
         self.replace_album_most_popular_track()
+        print("After replacing:")
+        self.print_current_playlist()
 
         # Insert/Update [FRESH] tracks in the playlist within past week
         self.update_playlist_ordered()
+        print("After inserting:")
+        self.print_current_playlist()
