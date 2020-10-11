@@ -46,7 +46,6 @@ class FreshTracks:
         self.last_accessed_time = self.get_last_accessed_time()
 
 
-
     def get_last_accessed_time(self) -> datetime:
         """Retrieve most recent datetime that is stored in the database.
 
@@ -557,7 +556,7 @@ class FreshTracks:
         """Inserts/Updates tracks into Playlist in order.
 
         Ensures that the playlist songs are in sorted order according to their
-        respective reddit upvote counts
+        respective reddit upvote counts.
         """
         # Find posts to update the playlist with
         posts = Post.objects.raw({"$and": 
@@ -566,18 +565,40 @@ class FreshTracks:
                 {"subreddit": self.subreddit_name}]}) \
                 .order_by([("upvotes", pymongo.DESCENDING)])
 
-        
+        playlisttracks = self.get_playlisttracks_ordered()
+        orig_playlist_len = len(list(playlisttracks))
+
+        # Num songs added that are not orig in playlist
         insert_count = 0
+        # Num songs that move up from their original playlist position
+        promote_count = 0
+        # Num songs that move down from their original playlist position
+        demote_count = 0
+
+        # Loop invariant: All items in playlist[0,i) are in sorted order
         for i, post in enumerate(list(posts)):
             if post.exists_in_playlist: # Reorder existing track
                 playlisttrack = list(PlaylistTrack.objects.
                         raw({"_id": post.reddit_post_id}))[0]
                 
                 # Update playlist on Spotify
+                pos = playlisttrack.playlist_position
+                new_pos = pos + insert_count + (promote_count - demote_count)
+                # Bounds check
+                assert(new_pos <= orig_playlist_len + insert_count) 
                 self.scli.spot.playlist_reorder_items(
                         playlist_id=self.playlist_id,
-                        range_start=playlisttrack.playlist_position,
+                        range_start=new_pos,
                         insert_before=i)
+
+                # If original pos was greater than new pos, then everything
+                # else got shifted down by 1. promote_count accounts for that.
+                # Similarly, if orig pos less than new pos, everything else
+                # shifted up by 1. demote_count accounts for that.
+                if pos > i:
+                    promote_count += 1
+                elif pos < i:
+                    demote_count += 1
 
                 # Update new playlist position in DB
                 playlisttrack.playlist_position = i
@@ -598,7 +619,6 @@ class FreshTracks:
                 # Update post
                 post.exists_in_playlist = True
                 post.save()
-
         
         print("\tInserted %d new tracks into the playlist" % insert_count)
         print("\tThere are now %d tracks in the playlist" % len(list(posts)))
@@ -630,15 +650,9 @@ class FreshTracks:
 
         # Remove stale/downvoted posts
         self.remove_playlist_old()
-        print("After removing:")
-        self.print_current_playlist()
 
         # Refresh which track of an album is most popular
         self.replace_album_most_popular_track()
-        print("After replacing:")
-        self.print_current_playlist()
 
         # Insert/Update [FRESH] tracks in the playlist within past week
         self.update_playlist_ordered()
-        print("After inserting:")
-        self.print_current_playlist()
