@@ -587,10 +587,11 @@ class FreshTracks:
                         insert_count + (promote_count - demote_count)
 
                 assert(pos_in_spotify < orig_playlist_len + insert_count) 
-                self.scli.spot.playlist_reorder_items(
-                        playlist_id=self.playlist_id,
-                        range_start=pos_in_spotify,
-                        insert_before=new_pos)
+                if pos_in_spotify != new_pos:
+                    self.scli.spot.playlist_reorder_items(
+                            playlist_id=self.playlist_id,
+                            range_start=pos_in_spotify,
+                            insert_before=new_pos)
 
                 # If original pos was greater than new pos, then everything
                 # else got shifted down by 1. promote_count accounts for that.
