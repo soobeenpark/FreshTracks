@@ -2,7 +2,7 @@
 Automatically update [FRESH]est new Album / Track releases.
 
 # What is this?
-On certain reddit subreddits such as r/indieheads, r/hiphopheads, or r/popheads, new music is uploaded by users with a [FRESH] tag in the title. For many users like myself, this is the main source of finding new music. Often times though, it's easy to miss a lot of great new music unless you frequent the subreddit 24/7. Thus, this is an effort to automate pulling all the [FRESH] tracks that get posted and neatly organize them into auto-updating Spotify playlists, one for each subreddit.
+On certain subreddits such as r/indieheads, r/hiphopheads, or r/popheads, new music is uploaded by users with a [FRESH] tag in the title. For many users like myself, this is the main source of finding new music. Often times though, it's easy to miss a lot of great new music unless you frequent the subreddit 24/7. Thus, this is an effort to automate pulling all the [FRESH] tracks that get posted and neatly organize them into auto-updating Spotify playlists, one for each subreddit.
 
 # Playlist Design
 1. The playlist only includes [FRESH] tracks **up to one week** since first posted to reddit. Older tracks are removed.
@@ -14,7 +14,7 @@ This is a great way to see which of the recent songs are generating the most buz
 To sort by recently added date (freshest posted date on Reddit) instead of number of upvotes (default), simply sort by date using the mechanism Spotify provides.
 
 4. The reddit posts tagged [FRESH] are sometimes albums/EPs which contain multiple tracks.  <br>
-In which case, **only the most popular track** (according to Spotify's algorithm) from each album exists in the playlist.
+In which case, **only the most popular track** (according to Spotify's algorithm) **from each album** exists in the playlist.
 
 5. The playlist gets updated **every hour**. <br>
 Every hour:
@@ -24,14 +24,14 @@ Every hour:
     - On each [FRESH] post with an album/EP, the most popular song is updated if it has changed within the past hour.\*
 
 <sub><sup>
-\* A small caveat as a result is that the "added date" on the Spotify playlist may not 100% accurately represent how fresh the track is. This is because if the most popular track on an album/EP changed, then the older popular track has to be removed and the newer popular track inserted from the playlist, which updates the date added. However, this does not change when the album/EP track gets removed from the playlist, since that date is calculated by the original reddit post's created date. However, these cases are **very rare**.
+\* A small caveat as a result is that the "added date" on the Spotify playlist may not 100% accurately mirror when it was posted on Reddit, if a more popular track on the album is swapped in. However, posts are still deleted after one week according to their Reddit posted date. These cases are **very rare**.
 </sup></sub>
 
 
 # Running the script
 The script is designed to be run as a cron job every hour.
 
-The script uses a Mongo database to keep track of [FRESH] tracks in the playlist, as well as all tracks that have ever been added (including old stale tracks after they are removed from the playlist). Make sure to have a MongoDB server running before running the script.
+The script uses a Mongo database to keep track of [FRESH] tracks in the playlist, as well as all tracks that have ever been added (including old stale tracks since removed from the playlist). Make sure to have a MongoDB server running before running the script.
 
 
 Steps.
@@ -40,7 +40,7 @@ Steps.
 1. Setup PRAW config file in `praw.ini` as directed by the PRAW docs.  <br>
 2. Setup Spotipy client ID, secret, and redirect URI, as well as project path directory in `runme.sh`.  <br>
 3. Install MongoDB server as instructed in their documentation.  <br>
-4. Install Python dependencies using `pip install -r requirements.txt` (Python venv recommended).  <br>
+4. Install Python dependencies using `pip install -r requirements.txt` (Python venv recommended, `runme.sh` assumes venv).  <br>
 5. Setup cron job to run `runme.sh` every hour.  <br>
 
 
