@@ -571,20 +571,16 @@ class FreshTracks:
 
         # Num songs added that are not orig in playlist
         insert_count = 0
-        # Num songs that move up from their original playlist position
-        promote_count = 0
-        # Num songs that move down from their original playlist position
-        demote_count = 0
 
         # Loop invariant: All items in playlist[0,i) are in sorted order
         for new_pos, post in enumerate(list(posts)):
+            print(new_pos, post.artist, post.track, post.upvotes)
             if post.exists_in_playlist: # Reorder existing track
                 playlisttrack = list(PlaylistTrack.objects.
                         raw({"_id": post.reddit_post_id}))[0]
                 
                 # Update playlist on Spotify
-                pos_in_spotify = playlisttrack.playlist_position + \
-                        insert_count + (promote_count - demote_count)
+                pos_in_spotify = playlisttrack.playlist_position + insert_count
 
                 assert(pos_in_spotify < orig_playlist_len + insert_count) 
                 if pos_in_spotify != new_pos:
@@ -593,14 +589,21 @@ class FreshTracks:
                             range_start=pos_in_spotify,
                             insert_before=new_pos)
 
-                # If original pos was greater than new pos, then everything
-                # else got shifted down by 1. promote_count accounts for that.
-                # Similarly, if orig pos less than new pos, everything else
-                # shifted up by 1. demote_count accounts for that.
                 if pos_in_spotify > new_pos:
-                    promote_count += 1
+                    # Reflect changed position of songs shifted down 1 spot
+                    shift = PlaylistTrack.objects.raw({"playlist_position": 
+                        {"$gte": new_pos, "$lt": pos_in_spotify}})
+                    for s in shift:
+                        s.playlist_position += 1
+                        s.save()
+
                 elif pos_in_spotify < new_pos:
-                    demote_count += 1
+                    # Reflect changed position of songs shifted up 1 spot
+                    shift = PlaylistTrack.objects.raw({"playlist_position": 
+                        {"$gt": pos_in_spotify, "$lte": new_pos}})
+                    for s in shift:
+                        s.playlist_position -= 1
+                        s.save()
 
                 # Update new playlist position in DB
                 playlisttrack.playlist_position = new_pos
