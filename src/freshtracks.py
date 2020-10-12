@@ -7,6 +7,7 @@ file: freshtracks.py
 """
 
 from datetime import datetime, timezone, timedelta
+import pdb
 import pprint
 import pymodm
 import pymongo
@@ -558,7 +559,7 @@ class FreshTracks:
         Ensures that the playlist songs are in sorted order according to their
         respective reddit upvote counts.
         """
-        # Find posts to update the playlist with
+        # Find posts to update playlist with, in order they are to be updated
         posts = Post.objects.raw({"$and": 
                 [{"created_utc": {"$gte": self.one_week_ago}},
                 {"upvotes": {"$gte": self.upvote_thresh}},
@@ -576,32 +577,32 @@ class FreshTracks:
         demote_count = 0
 
         # Loop invariant: All items in playlist[0,i) are in sorted order
-        for i, post in enumerate(list(posts)):
+        for new_pos, post in enumerate(list(posts)):
             if post.exists_in_playlist: # Reorder existing track
                 playlisttrack = list(PlaylistTrack.objects.
                         raw({"_id": post.reddit_post_id}))[0]
                 
                 # Update playlist on Spotify
-                pos = playlisttrack.playlist_position
-                new_pos = pos + insert_count + (promote_count - demote_count)
-                # Bounds check
-                assert(new_pos <= orig_playlist_len + insert_count) 
+                pos_in_spotify = playlisttrack.playlist_position + \
+                        insert_count + (promote_count - demote_count)
+
+                assert(pos_in_spotify < orig_playlist_len + insert_count) 
                 self.scli.spot.playlist_reorder_items(
                         playlist_id=self.playlist_id,
-                        range_start=new_pos,
-                        insert_before=i)
+                        range_start=pos_in_spotify,
+                        insert_before=new_pos)
 
                 # If original pos was greater than new pos, then everything
                 # else got shifted down by 1. promote_count accounts for that.
                 # Similarly, if orig pos less than new pos, everything else
                 # shifted up by 1. demote_count accounts for that.
-                if pos > i:
+                if pos_in_spotify > new_pos:
                     promote_count += 1
-                elif pos < i:
+                elif pos_in_spotify < new_pos:
                     demote_count += 1
 
                 # Update new playlist position in DB
-                playlisttrack.playlist_position = i
+                playlisttrack.playlist_position = new_pos
                 playlisttrack.save()
 
             else: # Insert track that didn't exist in playlist
@@ -609,12 +610,12 @@ class FreshTracks:
                 print("\t\t<<< Inserting " + post.artist + " - " + post.track)
 
                 # Insert to collection
-                PlaylistTrack(post=post, playlist_position=i) \
+                PlaylistTrack(post=post, playlist_position=new_pos) \
                     .save(force_insert=True)
 
                 # Insert to Spotify playlist
                 self.scli.spot.playlist_add_items(playlist_id=self.playlist_id,
-                        items=[post.spotify_track_uri], position=i)
+                        items=[post.spotify_track_uri], position=new_pos)
 
                 # Update post
                 post.exists_in_playlist = True
