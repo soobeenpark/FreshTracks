@@ -186,6 +186,10 @@ class FreshTracks:
             return_dict["title"] = re.sub(r"\(.*\)", "", gd["title1"]).strip()
             return_dict["freshtype"] = freshtype
 
+            # Exit early if parsed artist or title is empty
+            if not return_dict["artist"] or not return_dict["title"]:
+                return dict()
+
         return return_dict
 
 
@@ -239,6 +243,10 @@ class FreshTracks:
                 r"\(.*\)", "", gd["artist1"]).strip()
             return_dict["title"] = re.sub(r"\(.*\)", "", gd["title1"]).strip()
             return_dict["freshtype"] = gd["freshtype"]
+
+            # Exit early if parsed artist or title is empty
+            if not return_dict["artist"] or not return_dict["title"]:
+                return dict()
 
         return return_dict
 
