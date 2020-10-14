@@ -23,6 +23,7 @@ class Post(MongoModel):
 
     class Meta:
         connection_alias = "FreshTracks"
+        collection_name = "post"
         # Ensure that only one track per same album can exist in each subreddit playlist
         indexes = [
                 IndexModel(

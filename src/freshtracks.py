@@ -17,6 +17,7 @@ import re
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import sys
+import time
 from typing import List
 
 from redditcli import RedditCli
@@ -80,15 +81,16 @@ class FreshTracks:
             QuerySet: All tracks in playlist in sorted order.
         """
         # Get all posts from subreddit that are in playlist
-        posts = Post.objects.raw({"$and": 
-            [{"subreddit": self.subreddit_name},
-                {"exists_in_playlist": True}]})
-        post_ids = [p.reddit_post_id for p in posts]
+        posts = Post.objects.raw(
+                {"subreddit": self.subreddit_name, "exists_in_playlist": True})
+
+        ids = [p.reddit_post_id for p in posts] 
+        
         # Get all tracks in playlist in order
         playlisttracks = PlaylistTrack.objects \
-                .raw({"_id": {"$in": post_ids}}) \
+                .raw({"_id": {"$in": ids}}) \
                 .order_by([("playlist_position", pymongo.ASCENDING)])
-        
+
         return playlisttracks
 
 
@@ -439,6 +441,7 @@ class FreshTracks:
         count = 0
         for p in posts_to_insert:
             post_obj = Post(**p)
+            print("\t\t...Saving to DB: " + p["artist"] + " - " + p["track"])
             try:
                 # force_insert will raise DuplicateKeyError instead of
                 # quietly overwriting existing document
@@ -447,7 +450,6 @@ class FreshTracks:
                 # If post/album already exists, then discard this post
                 continue
             count += 1
-            print("\t\t...Saving to DB: " + p["artist"] + " - " + p["track"])
         print("\tAfter filtering, saved %d posts into DB" % count)
 
 
@@ -530,13 +532,11 @@ class FreshTracks:
 
             # Update track if most popular changed
             if track["uri"] != post.spotify_track_uri:
-                count += 1
-
                 # Update in Spotify playlist
                 playlisttrack = list(PlaylistTrack.objects \
                         .raw({"_id": post.reddit_post_id}))[0]
                 pos = playlisttrack.playlist_position
-
+                
                 self.scli.replace_track_at_pos(self.playlist_id, 
                         playlisttrack.post.spotify_track_uri, track["uri"], pos)
 
@@ -547,6 +547,8 @@ class FreshTracks:
                 post.save()
                 playlisttrack.delete()
                 PlaylistTrack(post=post, playlist_position=pos).save()
+
+                count += 1
 
 
         print("\t%d tracks in playlist have been swapped out for the " \
@@ -566,15 +568,16 @@ class FreshTracks:
                 {"subreddit": self.subreddit_name}]}) \
                 .order_by([("upvotes", pymongo.DESCENDING)])
 
-        playlisttracks = self.get_playlisttracks_ordered()
-        orig_playlist_len = len(list(playlisttracks))
+        # Number of posts in playlist before inserting
+        orig_playlist_len = Post.objects.raw({
+            "exists_in_playlist": True, 
+            "subreddit": self.subreddit_name}).count()
 
         # Num songs added that are not orig in playlist
         insert_count = 0
 
         # Loop invariant: All items in playlist[0,i) are in sorted order
         for new_pos, post in enumerate(list(posts)):
-            print(new_pos, post.artist, post.track, post.upvotes)
             if post.exists_in_playlist: # Reorder existing track
                 playlisttrack = list(PlaylistTrack.objects.
                         raw({"_id": post.reddit_post_id}))[0]
@@ -589,42 +592,48 @@ class FreshTracks:
                             range_start=pos_in_spotify,
                             insert_before=new_pos)
 
+                # Reflect changed position of songs shifted down 1 spot
                 if pos_in_spotify > new_pos:
-                    # Reflect changed position of songs shifted down 1 spot
-                    shift = PlaylistTrack.objects.raw({"playlist_position": 
-                        {"$gte": new_pos, "$lt": pos_in_spotify}})
-                    for s in shift:
-                        s.playlist_position += 1
-                        s.save()
+                    shift_posts = Post.objects.raw(
+                            {"exists_in_playlist": True, "subreddit": self.subreddit_name})
+                    shift_ids = [sp.reddit_post_id for sp in shift_posts]
+                    PlaylistTrack.objects.raw(
+                            {"_id": {"$in": shift_ids},
+                             "playlist_position": {"$gte": new_pos, "$lt": pos_in_spotify}}) \
+                                     .update({"$inc": {"playlist_position": 1}})
 
+                # Reflect changed position of songs shifted up 1 spot
                 elif pos_in_spotify < new_pos:
-                    # Reflect changed position of songs shifted up 1 spot
-                    shift = PlaylistTrack.objects.raw({"playlist_position": 
-                        {"$gt": pos_in_spotify, "$lte": new_pos}})
-                    for s in shift:
-                        s.playlist_position -= 1
-                        s.save()
+                    shift_posts = Post.objects.raw(
+                            {"exists_in_playlist": True, "subreddit": self.subreddit_name})
+                    shift_ids = [sp.reddit_post_id for sp in shift_posts]
+                    PlaylistTrack.objects.raw(
+                            {"_id": {"$in": shift_ids},
+                             "playlist_position": {"$gt": pos_in_spotify, "$lte": new_pos}}) \
+                                     .update({"$inc": {"playlist_position": -1}})
 
                 # Update new playlist position in DB
                 playlisttrack.playlist_position = new_pos
                 playlisttrack.save()
 
             else: # Insert track that didn't exist in playlist
-                insert_count += 1
-                print("\t\t<<< Inserting " + post.artist + " - " + post.track)
 
-                # Insert to collection
-                PlaylistTrack(post=post, playlist_position=new_pos) \
-                    .save(force_insert=True)
+                print("\t\t<<< Inserting " + post.artist + " - " + post.track)
 
                 # Insert to Spotify playlist
                 self.scli.spot.playlist_add_items(playlist_id=self.playlist_id,
                         items=[post.spotify_track_uri], position=new_pos)
 
+                # Insert to collection
+                PlaylistTrack(post=post, playlist_position=new_pos) \
+                    .save(force_insert=True)
+
                 # Update post
                 post.exists_in_playlist = True
                 post.save()
         
+                insert_count += 1
+
         print("\tInserted %d new tracks into the playlist" % insert_count)
         print("\tThere are now %d tracks in the playlist" % len(list(posts)))
 

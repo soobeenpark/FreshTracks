@@ -9,3 +9,4 @@ class PlaylistTrack(MongoModel):
 
     class Meta:
         connection_alias = "FreshTracks"
+        collection_name = "playlisttrack"
