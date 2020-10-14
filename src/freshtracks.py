@@ -594,6 +594,9 @@ class FreshTracks:
                 pos_in_spotify = playlisttrack.playlist_position + insert_count
 
                 assert(pos_in_spotify < orig_playlist_len + insert_count) 
+                print("\t\t||| Reordering " + post.artist + " - " + post.track + \
+                        " from " + str(pos_in_spotify) + " to " + str(new_pos))
+
                 if pos_in_spotify != new_pos:
                     self.scli.spot.playlist_reorder_items(
                             playlist_id=self.playlist_id,
@@ -660,7 +663,7 @@ class FreshTracks:
 
         # Search and populate Reddit post with Spotify data
         populated_posts = self.search_and_populate_posts(prepared_posts)
-        # Finally, add subreddit_name to each post
+        # Add subreddit_name to each post
         posts_to_insert = [dict(pp, subreddit=self.subreddit_name) 
                 for pp in populated_posts]
 
