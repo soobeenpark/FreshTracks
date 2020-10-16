@@ -1,6 +1,4 @@
-<p align="center">
-# FreshTracks
-</p>
+<h1 align="center">FreshTracks</h1>
 Automatically update [FRESH]est new Album / Track releases.
 
 # What is FreshTracks?
