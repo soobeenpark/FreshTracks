@@ -1,7 +1,9 @@
+<p align="center">
 # FreshTracks
+</p>
 Automatically update [FRESH]est new Album / Track releases.
 
-# What is this?
+# What is FreshTracks?
 On certain subreddits such as r/indieheads, r/hiphopheads, or r/popheads, new music is uploaded by users with a [FRESH] tag in the title. For many users like myself, this is the main source of finding new music. Often times though, it's easy to miss a lot of great new music unless you frequent the subreddit 24/7. Thus, this is an effort to automate pulling all the [FRESH] tracks that get posted and neatly organize them into auto-updating Spotify playlists, one for each subreddit.
 
 # Playlist Design
