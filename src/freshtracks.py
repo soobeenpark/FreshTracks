@@ -591,7 +591,7 @@ class FreshTracks:
                         raw({"_id": post.reddit_post_id}))[0]
                 
                 # Update playlist on Spotify
-                pos_in_spotify = playlisttrack.playlist_position + insert_count
+                pos_in_spotify = playlisttrack.playlist_position
 
                 assert(pos_in_spotify < orig_playlist_len + insert_count) 
                 print("\t\t||| Reordering " + post.artist + " - " + post.track + \
@@ -629,11 +629,21 @@ class FreshTracks:
 
             else: # Insert track that didn't exist in playlist
 
-                print("\t\t<<< Inserting " + post.artist + " - " + post.track)
+                print("\t\t<<< Inserting " + post.artist + " - " + post.track + \
+                        " to position " + str(new_pos))
 
                 # Insert to Spotify playlist
                 self.scli.spot.playlist_add_items(playlist_id=self.playlist_id,
                         items=[post.spotify_track_uri], position=new_pos)
+
+                # Shift all posts lower than pos down 1
+                shift_posts = Post.objects.raw(
+                        {"exists_in_playlist": True, "subreddit": self.subreddit_name})
+                shift_ids = [sp.reddit_post_id for sp in shift_posts]
+                PlaylistTrack.objects.raw(
+                        {"_id": {"$in": shift_ids},
+                         "playlist_position": {"$gte": new_pos}}) \
+                                 .update({"$inc": {"playlist_position": 1}})
 
                 # Insert to collection
                 PlaylistTrack(post=post, playlist_position=new_pos) \
@@ -642,7 +652,7 @@ class FreshTracks:
                 # Update post
                 post.exists_in_playlist = True
                 post.save()
-        
+
                 insert_count += 1
 
         print("\tInserted %d new tracks into the playlist" % insert_count)

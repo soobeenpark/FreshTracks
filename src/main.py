@@ -28,6 +28,7 @@ def main():
     logger = logging.getLogger(__name__)
 
     try:
+        print("==============================================")
         # Subreddit settings
         indieheads = {"subreddit_name": "indieheads",
                 "upvote_thresh": 20,
@@ -44,7 +45,7 @@ def main():
             print("Getting FreshTracks from r/" + subreddit_setting["subreddit_name"])
             freshtracks = FreshTracks(subreddit_setting)
             freshtracks.run()
-            print()
+            print("\n\n")
 
     except Exception as e:
         print(e)
