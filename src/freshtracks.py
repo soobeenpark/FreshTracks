@@ -602,6 +602,7 @@ class FreshTracks:
                             playlist_id=self.playlist_id,
                             range_start=pos_in_spotify,
                             insert_before=new_pos)
+                    time.sleep(1) # Needed for Spotify API rate limit
 
                 # Reflect changed position of songs shifted down 1 spot
                 if pos_in_spotify > new_pos:
@@ -635,6 +636,7 @@ class FreshTracks:
                 # Insert to Spotify playlist
                 self.scli.spot.playlist_add_items(playlist_id=self.playlist_id,
                         items=[post.spotify_track_uri], position=new_pos)
+                time.sleep(1) # Needed for Spotify API rate limit
 
                 # Shift all posts lower than pos down 1
                 shift_posts = Post.objects.raw(
