@@ -9,16 +9,15 @@ file: freshtracks.py
 from datetime import datetime, timezone, timedelta
 import pdb
 import pprint
+import re
+from typing import List
+import sys
+import time
+
 import pymodm
 import pymongo
 from pymongo.errors import DuplicateKeyError
 import pytz
-import re
-import spotipy
-from spotipy.oauth2 import SpotifyOAuth
-import sys
-import time
-from typing import List
 
 from redditcli import RedditCli
 from spotifycli import SpotifyCli
@@ -47,7 +46,6 @@ class FreshTracks:
         # Get the date and time of the most recently added [FRESH] track
         self.last_accessed_time = self.get_last_accessed_time()
 
-
     def get_last_accessed_time(self) -> datetime:
         """Retrieve most recent datetime that is stored in the database.
 
@@ -65,7 +63,8 @@ class FreshTracks:
                 .order_by([("created_utc", pymongo.DESCENDING)]) \
                 .limit(1)
             last_accessed_time = results[0].created_utc
-            last_accessed_time = pytz.utc.localize(last_accessed_time) # tzaware
+            last_accessed_time = pytz.utc.localize(
+                last_accessed_time)  # tzaware
         except Post.DoesNotExist:
             # If no results in database, set last accessed to 1 week ago
             last_accessed_time = self.one_week_ago
@@ -73,26 +72,24 @@ class FreshTracks:
         print("\tLast accessed: ", last_accessed_time)
         return last_accessed_time
 
-
     def get_playlisttracks_ordered(self) -> pymodm.queryset.QuerySet:
         """Helper method to get the tracks currently in the playlist
-        
+
         Return:
             QuerySet: All tracks in playlist in sorted order.
         """
         # Get all posts from subreddit that are in playlist
         posts = Post.objects.raw(
-                {"subreddit": self.subreddit_name, "exists_in_playlist": True})
+            {"subreddit": self.subreddit_name, "exists_in_playlist": True})
 
-        ids = [p.reddit_post_id for p in posts] 
-        
+        ids = [p.reddit_post_id for p in posts]
+
         # Get all tracks in playlist in order
         playlisttracks = PlaylistTrack.objects \
-                .raw({"_id": {"$in": ids}}) \
-                .order_by([("playlist_position", pymongo.ASCENDING)])
+            .raw({"_id": {"$in": ids}}) \
+            .order_by([("playlist_position", pymongo.ASCENDING)])
 
         return playlisttracks
-
 
     def print_current_playlist(self):
         """Helper method to print out playlist in order.
@@ -103,7 +100,6 @@ class FreshTracks:
             post = playlisttrack.post
             pos = playlisttrack.playlist_position
             print(pos, post.artist + "-" + post.track, post.upvotes)
-
 
     def parse_post_embdedded_media(self, media_description_str) -> dict:
         """Parses the embedded Spotify media description in the reddit post.
@@ -137,7 +133,6 @@ class FreshTracks:
             return dict()
 
         return gd
-
 
     def parse_post_title_wo_FRESH(self, freshtype, title_str) -> dict:
         """Parses the post title, that does not contain [FRESH (___)] in title.
@@ -191,7 +186,6 @@ class FreshTracks:
                 return dict()
 
         return return_dict
-
 
     def parse_post_title_with_FRESH(self, title_str) -> dict:
         """Parses the post title with FRESH in the title.
@@ -250,7 +244,6 @@ class FreshTracks:
 
         return return_dict
 
-
     def is_valid_freshtype(self, freshtype) -> bool:
         """Checks if the tag used in [FRESH ___] is a "valid" type.
 
@@ -274,7 +267,6 @@ class FreshTracks:
         else:
             return False
 
-
     def has_embedded_media(self, post) -> bool:
         """Helper method to check if post has embedded media we can use.
 
@@ -282,7 +274,7 @@ class FreshTracks:
             post (json): The Reddit post submission.
 
         Return:
-            bool: True if the post has embedded Spotify media with valid 
+            bool: True if the post has embedded Spotify media with valid
                 description, False otherwise.
         """
         if not post.media:
@@ -296,7 +288,6 @@ class FreshTracks:
         if "spotify" not in post.media["oembed"]["provider_name"].lower():
             return False
         return True
-
 
     def parse_fresh(self, fresh_posts) -> List:
         """Parses the post details so that they are ready to search in Spotify.
@@ -349,12 +340,12 @@ class FreshTracks:
 
                 elif self.subreddit_name in ("popheads") and \
                         "link_flair_text" in vars(post):
-                    parsed_dict = self.parse_post_title_wo_FRESH( \
-                            post.link_flair_text, post.title)
+                    parsed_dict = self.parse_post_title_wo_FRESH(
+                        post.link_flair_text, post.title)
 
                 else:
-                    raise Exception("Select parsing method for subreddit " + \
-                            self.subreddit_name)
+                    raise Exception("Select parsing method for subreddit " +
+                                    self.subreddit_name)
 
             if not parsed_dict:
                 # If no match able to be parsed, discard this post
@@ -370,7 +361,6 @@ class FreshTracks:
             prepared_posts.append(parsed_dict)
 
         return prepared_posts
-
 
     def search_and_populate_posts(self, prepared_posts) -> List:
         """Call to Spotify search() to populate each post dict with Spotify
@@ -424,7 +414,7 @@ class FreshTracks:
             if not searched:
                 # If still not populated, then this discard this post.
                 continue
-            
+
             # Finally add some of the existing relevant data in to the dict to
             # add
             searched["reddit_post_id"] = prepared_post["reddit_post_id"]
@@ -437,7 +427,6 @@ class FreshTracks:
             populated_posts.append(searched)
 
         return populated_posts
-
 
     def save_posts(self, posts_to_insert):
         """Saves the posts as documents in the Posts collection.
@@ -460,13 +449,12 @@ class FreshTracks:
             count += 1
         print("\tAfter filtering, saved %d posts into DB" % count)
 
-
     def refresh_upvotes(self):
         """Refreshes upvotes on each post within past week.
         """
         posts_past_week = Post.objects.raw({"$and":
-                [{"created_utc": {"$gte": self.one_week_ago}},
-                {"subreddit": self.subreddit_name}]})
+                                            [{"created_utc": {"$gte": self.one_week_ago}},
+                                             {"subreddit": self.subreddit_name}]})
         count = 0
         for post in posts_past_week:
             reddit_post_id = post.reddit_post_id
@@ -475,7 +463,6 @@ class FreshTracks:
             post.save()
             count += 1
         print("\tRefreshed %d posts' upvotes" % count)
-
 
     def remove_playlist_old(self):
         """Removes stale tracks from Playlist.
@@ -500,7 +487,7 @@ class FreshTracks:
                 # Add track to remove it later
                 assert(i == playlisttrack.playlist_position)
                 tracks_to_remove.append({"uri": post.spotify_track_uri,
-                    "positions": [i]})
+                                         "positions": [i]})
 
                 # Update post
                 post.exists_in_playlist = False
@@ -514,15 +501,16 @@ class FreshTracks:
 
             else:
                 # Adjust playlist position
-                playlisttrack.playlist_position = i-remove_count
+                playlisttrack.playlist_position = i - remove_count
                 playlisttrack.save()
 
         # Remove all appropriate tracks from Spotify playlist
         assert(remove_count == len(tracks_to_remove))
         self.scli.spot.playlist_remove_specific_occurrences_of_items(
-                playlist_id=self.playlist_id, items=tracks_to_remove)
-        print("\tRemoved %d stale/downvoted tracks from playlist" % remove_count)
-
+            playlist_id=self.playlist_id, items=tracks_to_remove)
+        print(
+            "\tRemoved %d stale/downvoted tracks from playlist" %
+            remove_count)
 
     def replace_album_most_popular_track(self):
         """Ensure that the most popular track of an album is in playlist.
@@ -541,12 +529,12 @@ class FreshTracks:
             # Update track if most popular changed
             if track["uri"] != post.spotify_track_uri:
                 # Update in Spotify playlist
-                playlisttrack = list(PlaylistTrack.objects \
-                        .raw({"_id": post.reddit_post_id}))[0]
+                playlisttrack = list(PlaylistTrack.objects
+                                     .raw({"_id": post.reddit_post_id}))[0]
                 pos = playlisttrack.playlist_position
-                
-                self.scli.replace_track_at_pos(self.playlist_id, 
-                        playlisttrack.post.spotify_track_uri, track["uri"], pos)
+
+                self.scli.replace_track_at_pos(
+                    self.playlist_id, playlisttrack.post.spotify_track_uri, track["uri"], pos)
 
                 # Update in DB
                 post.track = track["name"]
@@ -558,10 +546,8 @@ class FreshTracks:
 
                 count += 1
 
-
-        print("\t%d tracks in playlist have been swapped out for the " \
-            "more popular track in same album!" % count)
-
+        print("\t%d tracks in playlist have been swapped out for the "
+              "more popular track in same album!" % count)
 
     def update_playlist_ordered(self):
         """Inserts/Updates tracks into Playlist in order.
@@ -570,15 +556,15 @@ class FreshTracks:
         respective reddit upvote counts.
         """
         # Find posts to update playlist with, in order they are to be updated
-        posts = Post.objects.raw({"$and": 
-                [{"created_utc": {"$gte": self.one_week_ago}},
-                {"upvotes": {"$gte": self.upvote_thresh}},
-                {"subreddit": self.subreddit_name}]}) \
-                .order_by([("upvotes", pymongo.DESCENDING)])
+        posts = Post.objects.raw({"$and":
+                                  [{"created_utc": {"$gte": self.one_week_ago}},
+                                   {"upvotes": {"$gte": self.upvote_thresh}},
+                                      {"subreddit": self.subreddit_name}]}) \
+            .order_by([("upvotes", pymongo.DESCENDING)])
 
         # Number of posts in playlist before inserting
         orig_playlist_len = Post.objects.raw({
-            "exists_in_playlist": True, 
+            "exists_in_playlist": True,
             "subreddit": self.subreddit_name}).count()
 
         # Num songs added that are not orig in playlist
@@ -586,66 +572,74 @@ class FreshTracks:
 
         # Loop invariant: All items in playlist[0,i) are in sorted order
         for new_pos, post in enumerate(list(posts)):
-            if post.exists_in_playlist: # Reorder existing track
+            if post.exists_in_playlist:  # Reorder existing track
                 playlisttrack = list(PlaylistTrack.objects.
-                        raw({"_id": post.reddit_post_id}))[0]
-                
+                                     raw({"_id": post.reddit_post_id}))[0]
+
                 # Update playlist on Spotify
                 pos_in_spotify = playlisttrack.playlist_position
 
-                assert(pos_in_spotify < orig_playlist_len + insert_count) 
-                print("\t\t||| Reordering " + post.artist + " - " + post.track + \
-                        " from " + str(pos_in_spotify) + " to " + str(new_pos))
+                assert(pos_in_spotify < orig_playlist_len + insert_count)
+                print(
+                    "\t\t||| Reordering " +
+                    post.artist +
+                    " - " +
+                    post.track +
+                    " from " +
+                    str(pos_in_spotify) +
+                    " to " +
+                    str(new_pos))
 
                 if pos_in_spotify != new_pos:
                     self.scli.spot.playlist_reorder_items(
-                            playlist_id=self.playlist_id,
-                            range_start=pos_in_spotify,
-                            insert_before=new_pos)
-                    time.sleep(1) # Needed for Spotify API rate limit
+                        playlist_id=self.playlist_id,
+                        range_start=pos_in_spotify,
+                        insert_before=new_pos)
+                    time.sleep(1)  # Needed for Spotify API rate limit
 
                 # Reflect changed position of songs shifted down 1 spot
                 if pos_in_spotify > new_pos:
                     shift_posts = Post.objects.raw(
-                            {"exists_in_playlist": True, "subreddit": self.subreddit_name})
+                        {"exists_in_playlist": True, "subreddit": self.subreddit_name})
                     shift_ids = [sp.reddit_post_id for sp in shift_posts]
                     PlaylistTrack.objects.raw(
-                            {"_id": {"$in": shift_ids},
-                             "playlist_position": {"$gte": new_pos, "$lt": pos_in_spotify}}) \
-                                     .update({"$inc": {"playlist_position": 1}})
+                        {"_id": {"$in": shift_ids},
+                         "playlist_position": {"$gte": new_pos, "$lt": pos_in_spotify}}) \
+                        .update({"$inc": {"playlist_position": 1}})
 
                 # Reflect changed position of songs shifted up 1 spot
                 elif pos_in_spotify < new_pos:
                     shift_posts = Post.objects.raw(
-                            {"exists_in_playlist": True, "subreddit": self.subreddit_name})
+                        {"exists_in_playlist": True, "subreddit": self.subreddit_name})
                     shift_ids = [sp.reddit_post_id for sp in shift_posts]
                     PlaylistTrack.objects.raw(
-                            {"_id": {"$in": shift_ids},
-                             "playlist_position": {"$gt": pos_in_spotify, "$lte": new_pos}}) \
-                                     .update({"$inc": {"playlist_position": -1}})
+                        {"_id": {"$in": shift_ids},
+                         "playlist_position": {"$gt": pos_in_spotify, "$lte": new_pos}}) \
+                        .update({"$inc": {"playlist_position": -1}})
 
                 # Update new playlist position in DB
                 playlisttrack.playlist_position = new_pos
                 playlisttrack.save()
 
-            else: # Insert track that didn't exist in playlist
+            else:  # Insert track that didn't exist in playlist
 
-                print("\t\t<<< Inserting " + post.artist + " - " + post.track + \
-                        " to position " + str(new_pos))
+                print("\t\t<<< Inserting " + post.artist + " - " + post.track +
+                      " to position " + str(new_pos))
 
                 # Insert to Spotify playlist
-                self.scli.spot.playlist_add_items(playlist_id=self.playlist_id,
-                        items=[post.spotify_track_uri], position=new_pos)
-                time.sleep(1) # Needed for Spotify API rate limit
+                self.scli.spot.playlist_add_items(
+                    playlist_id=self.playlist_id, items=[
+                        post.spotify_track_uri], position=new_pos)
+                time.sleep(1)  # Needed for Spotify API rate limit
 
                 # Shift all posts lower than pos down 1
                 shift_posts = Post.objects.raw(
-                        {"exists_in_playlist": True, "subreddit": self.subreddit_name})
+                    {"exists_in_playlist": True, "subreddit": self.subreddit_name})
                 shift_ids = [sp.reddit_post_id for sp in shift_posts]
                 PlaylistTrack.objects.raw(
-                        {"_id": {"$in": shift_ids},
-                         "playlist_position": {"$gte": new_pos}}) \
-                                 .update({"$inc": {"playlist_position": 1}})
+                    {"_id": {"$in": shift_ids},
+                     "playlist_position": {"$gte": new_pos}}) \
+                    .update({"$inc": {"playlist_position": 1}})
 
                 # Insert to collection
                 PlaylistTrack(post=post, playlist_position=new_pos) \
@@ -660,24 +654,22 @@ class FreshTracks:
         print("\tInserted %d new tracks into the playlist" % insert_count)
         print("\tThere are now %d tracks in the playlist" % len(list(posts)))
 
-
     def run(self):
         """Driver to run the whole program."""
         # Retrieve new posts in subreddit since last time script was run
         fresh_posts = self.rcli.retrieve_fresh(self.last_accessed_time,
-                self.subreddit_name)
+                                               self.subreddit_name)
         print("\tRetrieved ", len(fresh_posts), " posts from ",
-                self.subreddit_name)
+              self.subreddit_name)
 
-        
         # Filter new posts to only those with [FRESH] tags in them
         prepared_posts = self.parse_fresh(fresh_posts)
 
         # Search and populate Reddit post with Spotify data
         populated_posts = self.search_and_populate_posts(prepared_posts)
         # Add subreddit_name to each post
-        posts_to_insert = [dict(pp, subreddit=self.subreddit_name) 
-                for pp in populated_posts]
+        posts_to_insert = [dict(pp, subreddit=self.subreddit_name)
+                           for pp in populated_posts]
 
         # Save posts
         self.save_posts(posts_to_insert)

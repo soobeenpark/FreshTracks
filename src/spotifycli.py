@@ -8,11 +8,11 @@ file: spotifycli.py
 """
 
 import json
-import pprint
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
-scope = "playlist-modify-public playlist-modify-private playlist-read-private"
+SCOPE = "playlist-modify-public playlist-modify-private playlist-read-private"
+
 
 class SpotifyCli:
     """General class to help with interacting with Spotify API."""
@@ -27,14 +27,14 @@ class SpotifyCli:
             SPOTIPY_CLIENT_SECRET='your-spotify-client-secret'
             SPOTIPY_REDIRECT_URI='your-spotipy-redirect-uri'
         """
-        auth_manager = SpotifyOAuth(scope=scope)
+        auth_manager = SpotifyOAuth(scope=SCOPE)
         self.spot = spotipy.Spotify(auth_manager=auth_manager)
         # (Spotify sets limit max to 50)
         self.album_tracks_limit = 50
 
     def search(self, artist, title, type_str) -> json:
         """Search an artist + title combo in Spotify.
-        
+
         Args:
             spot (spotify.Spotify): Initialized Spotify client.
             artist (str): The artist.
@@ -49,8 +49,6 @@ class SpotifyCli:
         result = self.spot.search(q=query_str, type=type_str, limit=1)
 
         return result
-
-
 
     def populate_from_track(self, item) -> dict:
         """Populates the info that we care about from a track item to a dict.
@@ -72,9 +70,8 @@ class SpotifyCli:
         populated["total_tracks"] = item["album"]["total_tracks"]
         populated["track_num"] = item["track_number"]
         populated["spotify_track_uri"] = item["uri"]
-        
-        return populated
 
+        return populated
 
     def populate_from_album(self, item) -> dict:
         """Populates the info that we care about from an album item to a dict.
@@ -109,7 +106,6 @@ class SpotifyCli:
 
         return populated
 
-
     def get_most_popular(self, spotify_album_uri) -> json:
         """Retrieve the most popular track on album.
 
@@ -121,10 +117,10 @@ class SpotifyCli:
         Return:
             json: The most popular track's info
         """
-        # Get all tracks in album 
-        tracks = self.spot.album_tracks(spotify_album_uri, 
-                limit=self.album_tracks_limit)["items"]
-        
+        # Get all tracks in album
+        tracks = self.spot.album_tracks(spotify_album_uri,
+                                        limit=self.album_tracks_limit)["items"]
+
         # Get full track info for each, not just simplified
         track_ids = [t.get("uri", "") for t in tracks]
         tracks_full = self.spot.tracks(track_ids).get("tracks")
@@ -136,9 +132,8 @@ class SpotifyCli:
 
         return most_popular
 
-
     def replace_track_at_pos(self, playlist_id, old_track_uri, new_track_uri,
-            pos):
+                             pos):
         """Replaces track in playlist at pos with track_to_insert.
 
         Args:
@@ -149,8 +144,8 @@ class SpotifyCli:
         """
         # Remove track at pos
         self.spot.playlist_remove_specific_occurrences_of_items(
-                playlist_id, 
-                [{"uri": old_track_uri, "positions": [pos]}])
+            playlist_id,
+            [{"uri": old_track_uri, "positions": [pos]}])
 
         # Insert new track at same pos
         self.spot.playlist_add_items(playlist_id, [new_track_uri], pos)

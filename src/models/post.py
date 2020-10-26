@@ -4,6 +4,7 @@ from pymongo import IndexModel
 
 connect("mongodb://localhost:27017/FreshTracks", alias="FreshTracks")
 
+
 class Post(MongoModel):
     reddit_post_id = fields.CharField(required=True, primary_key=True)
     subreddit = fields.CharField()
@@ -24,11 +25,11 @@ class Post(MongoModel):
     class Meta:
         connection_alias = "FreshTracks"
         collection_name = "post"
-        # Ensure that only one track per same album can exist in each subreddit playlist
+        # Ensure that only one track per same album can exist in each subreddit
+        # playlist
         indexes = [
-                IndexModel(
-                    keys=[("spotify_album_uri", pymongo.ASCENDING),
-                          ("subreddit", pymongo.ASCENDING)],
-                    unique=True)
-                ]
-
+            IndexModel(
+                keys=[("spotify_album_uri", pymongo.ASCENDING),
+                      ("subreddit", pymongo.ASCENDING)],
+                unique=True)
+        ]

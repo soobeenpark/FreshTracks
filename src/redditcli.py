@@ -8,10 +8,8 @@ file: redditcli.py
 """
 
 from datetime import datetime, timezone
-import pprint
-import praw
-import pytz
 from typing import List
+import praw
 
 
 class RedditCli:
@@ -26,7 +24,6 @@ class RedditCli:
         """
         self.reddit = praw.Reddit(botname, config_interpolation=config_interp)
         self.limit_max = 1000   # Max amount of posts to retreive at once
-
 
     def retrieve_fresh(self, last_accessed_time, subreddit_name) -> List:
         """Retrieve all fresh posts in subreddit since script was last run.

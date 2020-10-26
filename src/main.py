@@ -6,10 +6,10 @@ author: Soobeen Park
 file: main.py
 """
 
-import os
-from freshtracks import FreshTracks
 import logging
+import os
 import sys
+from freshtracks import FreshTracks
 
 
 def main():
@@ -23,26 +23,28 @@ def main():
     # Setup logger to log any exceptions
     log_format_str = "%(asctime)s %(levelname)s %(name)s %(message)s"
     logging.basicConfig(filename=log_files_path + "error.log",
-            level=logging.ERROR,
-            format=log_format_str)
+                        level=logging.ERROR,
+                        format=log_format_str)
     logger = logging.getLogger(__name__)
 
     try:
         print("==============================================")
         # Subreddit settings
         indieheads = {"subreddit_name": "indieheads",
-                "upvote_thresh": 20,
-                "playlist_id": "3QlWwTD13vWFH6UOTH9514"}
+                      "upvote_thresh": 20,
+                      "playlist_id": "3QlWwTD13vWFH6UOTH9514"}
         hiphopheads = {"subreddit_name": "hiphopheads",
-                "upvote_thresh": 20,
-                "playlist_id": "3KwOTBOoSfymm3trVqr0oJ"}
+                       "upvote_thresh": 20,
+                       "playlist_id": "3KwOTBOoSfymm3trVqr0oJ"}
         popheads = {"subreddit_name": "popheads",
-                "upvote_thresh": 20,
-                "playlist_id": "72aULoyZowHVuHH1kETADA"}
+                    "upvote_thresh": 20,
+                    "playlist_id": "72aULoyZowHVuHH1kETADA"}
         subreddit_settings = [indieheads, hiphopheads, popheads]
 
         for subreddit_setting in subreddit_settings:
-            print("Getting FreshTracks from r/" + subreddit_setting["subreddit_name"])
+            print(
+                "Getting FreshTracks from r/" +
+                subreddit_setting["subreddit_name"])
             freshtracks = FreshTracks(subreddit_setting)
             freshtracks.run()
             print("\n\n")
